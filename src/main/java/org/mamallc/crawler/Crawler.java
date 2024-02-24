@@ -54,60 +54,35 @@ public class Crawler {
             StringBuilder word = new StringBuilder();
             int i = 0;
             while(i < Objects.requireNonNull(content).length()) {
-                char ch = content.charAt(i);
-                if (word.length() > 26) {
-                    word = new StringBuilder();
-                }
-                // if (ch != '<' && ch != ' ' && ch != ',' && ch != '-' && ch != ';' && ch != '\'' && ch != '(' && ch != ')' && ch != '/' && ch != '.' && ch != '"' && ch != '\n' && ch != ':') {
-                    // word.append(ch);
-                // } else {
-                    // Skip the tags
-                    if (content.charAt(i) == '<' || content.charAt(i) == ' ') {
-                        if (!word.isEmpty()) {
-                            String textWord = word.toString().trim().toLowerCase();
-                            pg.textSet.putIfAbsent(textWord, 0);
-                            pg.textSet.put(textWord, pg.textSet.get(textWord) + 1);
-                            word = new StringBuilder();
-                        }
-                        StringBuilder htmlTag = new StringBuilder();
-                        if (content.charAt(i) == '<') {
-                            while (content.charAt(++i) != '>') {
-                                htmlTag.append(content.charAt(i));
-                            }
 
-                            // Get href from <a> tag
-                            System.out.println(htmlTag);
-                            String htmlTagString = htmlTag.toString();
-                            if (htmlTag.charAt(0) == 'a' && htmlTag.charAt(1) == ' ') {
-                                int j = 0;
-                                StringBuilder nestedURL = new StringBuilder();
-                                try {
-                                    while (htmlTagString.charAt(++j) != 'h') ;
-                                    while (htmlTagString.charAt(++j) != '"' && htmlTagString.charAt(j) != '\'') ;
-                                    while (htmlTagString.charAt(++j) != '"' && htmlTagString.charAt(j) != '\'') {
-                                        nestedURL.append(htmlTagString.charAt(j));
-                                    }
-                                } catch (StringIndexOutOfBoundsException siobe) {
-                                    System.out.println(siobe + ": Incorrect URL format, skipping...");
-                                }
-                                String rootURL = getRootURL(url);
-                                if (nestedURL.toString().contains(rootURL)) {
-                                    System.out.println("URL: " + nestedURL);
-                                    checkRobotsTxt(nestedURL.toString());
-                                } else {
-                                    StringBuilder fullURL = new StringBuilder(rootURL);
-                                    fullURL.append(nestedURL);
-                                    System.out.println("full url "+fullURL);
-                                    checkRobotsTxt(fullURL.toString());
-                                }
-                            } else if (htmlTagString.equals("script") || htmlTagString.equals("style")) {
-                                // Shit code
-                                while (content.charAt(i) != '/' && content.charAt(i + 1) != 's') i++;
-                            }
+                // We want to skip the html tags and their attributes from the text index
+                if (content.charAt(i) == '<') {
+                    // In case the tag is an <a> tag, we want to extract the href
+                    if (content.charAt(i+1) == 'a' && content.charAt(i+2) == ' ') {
+                        StringBuilder nestedURL = new StringBuilder();
+                        while(content.charAt(++i) != 'h');
+                        while(content.charAt(++i) != '"' && content.charAt(i) != '\'');
+                        while(content.charAt(++i) != '"' && content.charAt(i) != '\'') {
+                            nestedURL.append(content.charAt(i));
                         }
+                        System.out.println("URL: "+nestedURL);
                     }
+                    while (content.charAt(++i) != '>');
+                    i++;
+                    continue;
                 }
-            //}
+                StringBuilder text = new StringBuilder();
+                while(content.charAt(i) != ' ' && content.charAt(i) != '"' && content.charAt(i) != '\'' && content.charAt(i) != '-' && content.charAt(i) != '<' && content.charAt(i) != ',' && content.charAt(i) != '\r' && content.charAt(i) != '\n') {
+                    text.append(content.charAt(i));
+                    i++;
+                }
+                if (!text.isEmpty()) {
+                    String processedText = text.toString().trim().toLowerCase();
+                    pg.textSet.putIfAbsent(processedText, 0);
+                    pg.textSet.put(processedText, pg.textSet.get(processedText) + 1);
+                }
+                i++;
+            }
         } catch (Exception exp) {
             System.out.println(exp);
         }
