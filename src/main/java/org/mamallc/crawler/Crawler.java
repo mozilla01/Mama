@@ -1,13 +1,40 @@
 package org.mamallc.crawler;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.InputStreamReader;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
 
 public class Crawler {
+
+    public static String decompress(String str) throws Exception {
+        byte[] byteCompressed = str.getBytes(StandardCharsets.UTF_8);
+        final StringBuilder outStr = new StringBuilder();
+        if ((byteCompressed == null) || (byteCompressed.length == 0)) {
+            return "";
+        }
+        if (isCompressed(byteCompressed)) {
+            final GZIPInputStream gis = new GZIPInputStream(new ByteArrayInputStream(byteCompressed));
+            final BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(gis, "UTF-8"));
+            String line;
+            while ((line = bufferedReader.readLine()) != null) {
+                outStr.append(line);
+            }
+        } else {
+            outStr.append(byteCompressed);
+        }
+        return outStr.toString();
+    }
+    public static boolean isCompressed(final byte[] compressed) {
+        return (compressed[0] == (byte) (GZIPInputStream.GZIP_MAGIC)) && (compressed[1] == (byte) (GZIPInputStream.GZIP_MAGIC >> 8));
+    }
     String getRootURL(String url) {
 
         int i = 0;
@@ -78,9 +105,14 @@ public class Crawler {
 
         try {
             conn = new URL(url).openConnection();
+            String contentEncoding = conn.getContentEncoding();
             Scanner sc = new Scanner(conn.getInputStream());
             sc.useDelimiter("\\Z");
             content = sc.next();
+            if (contentEncoding.equals("gzip")) {
+                // content = decompress(content);
+                content = "";
+            }
             sc.close();
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -90,13 +122,14 @@ public class Crawler {
             StringBuilder word = new StringBuilder();
             int i = 0;
             System.out.println(content);
-            while(i < Objects.requireNonNull(content).length()) {
+            try {
+                while (i < Objects.requireNonNull(content).length()) {
 
-                // We want to skip the html tags and their attributes from the text index
-                if (content.charAt(i) == '<') {
-                    // In case the tag is an <a> tag, we want to extract the href
-                    if (content.charAt(i+1) == 'a' && content.charAt(i+2) == ' ') {
-                        try {
+                    // We want to skip the html tags and their attributes from the text index
+                    if (content.charAt(i) == '<') {
+                        System.out.println("Found it");
+                        // In case the tag is an <a> tag, we want to extract the href
+                        if (content.charAt(i + 1) == 'a' && content.charAt(i + 2) == ' ') {
                             StringBuilder nestedURL = new StringBuilder();
                             while (content.charAt(++i) != 'h') ;
                             while (content.charAt(++i) != '"' && content.charAt(i) != '\'') ;
@@ -112,7 +145,7 @@ public class Crawler {
                                 if (nestedURL.charAt(0) != '/') completeURL.append('/');
                                 completeURL.append(nestedURL);
                             }
-                            System.out.println("Formed after processing URL :"+completeURL);
+                            System.out.println("Formed after processing URL :" + completeURL);
 
                             System.out.println("-------Robot file checking---------");
                             if (checkRobotsTxt(completeURL.toString(), rootURL)) {
@@ -120,28 +153,28 @@ public class Crawler {
                             } else {
                                 System.out.println("Not allowed");
                             }
-                        } catch (StringIndexOutOfBoundsException siob) {
-                            System.out.println("Incorrect URL format: "+siob);
                         }
+                        while (content.charAt(++i) != '>') ;
+                        i++;
+                        continue;
                     }
-                    while (content.charAt(++i) != '>');
-                    i++;
-                    continue;
-                }
 
-                // Start building the word
-                StringBuilder text = new StringBuilder();
-                while(content.charAt(i) != ' ' && content.charAt(i) != '>' && content.charAt(i) != ')' && content.charAt(i) != '_' && content.charAt(i) != '#' && content.charAt(i) != '(' && content.charAt(i) != '\\' && content.charAt(i) != '/' && content.charAt(i) != '$' && content.charAt(i) != '"' && content.charAt(i) != '\'' && content.charAt(i) != '-' && content.charAt(i) != '<' && content.charAt(i) != ',' && content.charAt(i) != '\r' && content.charAt(i) != '\n') {
-                    text.append(content.charAt(i));
+                    // Start building the word
+                    StringBuilder text = new StringBuilder();
+                    while (content.charAt(i) != ' ' && content.charAt(i) != '>' && content.charAt(i) != ')' && content.charAt(i) != '_' && content.charAt(i) != '#' && content.charAt(i) != '(' && content.charAt(i) != '\\' && content.charAt(i) != '/' && content.charAt(i) != '$' && content.charAt(i) != '"' && content.charAt(i) != '\'' && content.charAt(i) != '-' && content.charAt(i) != '<' && content.charAt(i) != ',' && content.charAt(i) != '\r' && content.charAt(i) != '\n') {
+                        text.append(content.charAt(i));
+                        i++;
+                    }
+                    if (text.length() > 25) text = new StringBuilder();
+                    if (!text.isEmpty()) {
+                        String processedText = text.toString().trim().toLowerCase();
+                        pg.textSet.putIfAbsent(processedText, 0);
+                        pg.textSet.put(processedText, pg.textSet.get(processedText) + 1);
+                    }
                     i++;
                 }
-                if (text.length() > 25) text = new StringBuilder();
-                if (!text.isEmpty()) {
-                    String processedText = text.toString().trim().toLowerCase();
-                    pg.textSet.putIfAbsent(processedText, 0);
-                    pg.textSet.put(processedText, pg.textSet.get(processedText) + 1);
-                }
-                i++;
+            } catch (Exception e) {
+                System.out.println("Error while crawling: "+e);
             }
         return pg;
     }
