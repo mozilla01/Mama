@@ -9,13 +9,6 @@ public class Main {
         System.out.println("Hello and welcome!");
 
         Crawler cr = new Crawler();
-        Page pg = cr.fetchPage("https://amazon.in");
-
-        System.out.println("=================Map entries=================");
-        for (Map.Entry entry : pg.textSet.entrySet()) {
-            String key = entry.getKey().toString();
-            Integer val = (Integer) entry.getValue();
-            System.out.println(key+"->"+val);
-        }
+        cr.fetchPage();
     }
 }
