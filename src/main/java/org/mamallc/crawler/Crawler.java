@@ -1,5 +1,7 @@
 package org.mamallc.crawler;
 
+import org.mamallc.utils.API;
+
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
@@ -12,7 +14,6 @@ import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 
 public class Crawler {
-    static List<String> queue = new ArrayList<>(List.of("https://www.merriam-webster.com/dictionary/dictionary", "https://youtube.com", "https://en.wikipedia.org/wiki/Protocol_(science)"));
 
     public static String decompress(String str) throws Exception {
         byte[] byteCompressed = str.getBytes(StandardCharsets.UTF_8);
@@ -88,7 +89,8 @@ public class Crawler {
                             }
                             rule = sc.nextLine().split(":");
                             directive = rule[0].trim();
-                            route = rule[1].trim();
+                            if (rule.length > 1)
+                                route = rule[1].trim();
                         }
                     }
                 }
@@ -101,9 +103,9 @@ public class Crawler {
     }
 
     public void fetchPage() {
-        while (!queue.isEmpty()) {
-            String url = queue.get(0);
-            queue.remove(0);
+        while (true) {
+            Set<String> queue = new HashSet<>();
+            String url = API.getNextURL();
 
             System.out.println("-------------------");
             System.out.println("Now crawling "+url);
@@ -156,15 +158,20 @@ public class Crawler {
                                     }
 
                                     System.out.println("-------Robot file checking---------");
-                                    if (checkRobotsTxt(completeURL.toString(), rootURL)) {
-                                        System.out.println("Allowed: " + completeURL);
-                                        queue.add(completeURL.toString());
-                                    } else {
-                                        System.out.println("Disallowed: " + completeURL);
+                                    if (!queue.contains(completeURL.toString())) {
+                                        if (checkRobotsTxt(completeURL.toString(), rootURL)) {
+                                            System.out.println("Allowed: " + completeURL);
+                                            queue.add(completeURL.toString());
+                                        } else {
+                                            System.out.println("Disallowed: " + completeURL);
+                                        }
                                     }
                                 } catch (Exception e) {
                                     System.out.println("Incorrect URL format: "+e);
                                 }
+                            }
+                            else if (content.charAt(i + 1) == 's' && (content.charAt(i + 2) == 'c' || content.charAt(i+2) == 't') && (content.charAt(i + 3) == 'r' || content.charAt(i+3) == 'y')) {
+                                while(content.charAt(++i) != '<' && content.charAt(i) != '/' && content.charAt(i) != 's');
                             }
                             while (content.charAt(++i) != '>') ;
                             i++;
@@ -174,7 +181,7 @@ public class Crawler {
                         // Start building the word
                         StringBuilder text = new StringBuilder();
                         try {
-                            while (content.charAt(i) != ' ' && content.charAt(i) != '>' && content.charAt(i) != ')' && content.charAt(i) != '_' && content.charAt(i) != '#' && content.charAt(i) != '(' && content.charAt(i) != '\\' && content.charAt(i) != '/' && content.charAt(i) != '$' && content.charAt(i) != '"' && content.charAt(i) != '\'' && content.charAt(i) != '-' && content.charAt(i) != '<' && content.charAt(i) != ',' && content.charAt(i) != '\r' && content.charAt(i) != '\n') {
+                            while (content.charAt(i) != ' ' && content.charAt(i) != '>' && content.charAt(i) != ')' && content.charAt(i) != '_' && content.charAt(i) != '#' && content.charAt(i) != '(' && content.charAt(i) != '\\' && content.charAt(i) != '/' && content.charAt(i) != '$' && content.charAt(i) != '"' && content.charAt(i) != '\'' && content.charAt(i) != '-' && content.charAt(i) != '<' && content.charAt(i) != ',' && content.charAt(i) != '\r' && content.charAt(i) != '\n' && content.charAt(i) != '.') {
                                 text.append(content.charAt(i));
                                 i++;
                             }
@@ -189,6 +196,10 @@ public class Crawler {
                         }
                         i++;
                     }
+                    int id = API.insertPage(url);
+                    API.insertTextIndices(pg.textSet, id);
+                    API.enqueueURLs(queue);
+
                     System.out.println("-----------------Map entries-----------------");
                     for (Map.Entry entry : pg.textSet.entrySet()) {
                         String key = entry.getKey().toString();
