@@ -89,8 +89,7 @@ public class Crawler {
                             }
                             rule = sc.nextLine().split(":");
                             directive = rule[0].trim();
-                            if (rule.length > 1)
-                                route = rule[1].trim();
+                            route = rule[1].trim();
                         }
                     }
                 }
@@ -132,7 +131,6 @@ public class Crawler {
             }
 
             // Parsing the HTML for words
-            StringBuilder word = new StringBuilder();
             int i = 0;
             if (content != null && !content.isEmpty())
                     while (i < Objects.requireNonNull(content).length()) {
@@ -189,23 +187,22 @@ public class Crawler {
                             System.out.println(siob);
                         }
                         if (text.length() > 25) text = new StringBuilder();
-                        if (!text.isEmpty()) {
+                        if ((text.toString()) != null && !(text.toString().trim().isEmpty()) && !(text.toString().isBlank())) {
                             String processedText = text.toString().trim().toLowerCase();
                             pg.textSet.putIfAbsent(processedText, 0);
                             pg.textSet.put(processedText, pg.textSet.get(processedText) + 1);
                         }
                         i++;
                     }
-                    int id = API.insertPage(url);
-                    API.insertTextIndices(pg.textSet, id);
-                    API.enqueueURLs(queue);
-
                     System.out.println("-----------------Map entries-----------------");
                     for (Map.Entry entry : pg.textSet.entrySet()) {
                         String key = entry.getKey().toString();
                         Integer val = (Integer) entry.getValue();
                         System.out.println(key+"->"+val);
                     }
+                    int id = API.insertPage(url);
+                    API.insertTextIndices(pg.textSet, id);
+                    API.enqueueURLs(queue);
         }
     }
 }

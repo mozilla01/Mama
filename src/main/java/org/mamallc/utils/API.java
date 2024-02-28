@@ -37,7 +37,7 @@ public class API {
     }
 
     public static void insertTextIndices(Map<String, Integer> mp, int page) {
-        TextIndex textIndex[] = new TextIndex[mp.size()];
+        TextIndex[] textIndex = new TextIndex[mp.size()];
         int count = 0;
         for (Map.Entry<String, Integer> entry : mp.entrySet()) {
             textIndex[count] = new TextIndex();
