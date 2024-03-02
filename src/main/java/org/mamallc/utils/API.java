@@ -38,6 +38,7 @@ public class API {
 
     public static void insertTextIndices(Map<String, Integer> mp, int page) {
         TextIndex[] textIndex = new TextIndex[mp.size()];
+        System.out.println("Building the text index...");
         int count = 0;
         for (Map.Entry<String, Integer> entry : mp.entrySet()) {
             textIndex[count] = new TextIndex();
@@ -49,6 +50,9 @@ public class API {
         try {
             Gson gson = new Gson();
             String jsonRequest = gson.toJson(textIndex);
+            System.out.println(jsonRequest);
+            System.out.println("Text index JSON request:");
+            System.out.println(jsonRequest);
             HttpRequest postRequest = HttpRequest.newBuilder()
                     .uri(new URI(APIURL+"/create-text-indices/"))
                     .header("Content-Type", "application/json")
@@ -77,6 +81,8 @@ public class API {
 
             String str = postResponse.body();
             int end = str.length() - 1;
+
+            // The string is returned with double quotes at beginning and end. So,
             urlString = str.substring(1, end);
         } catch (Exception e) {
             System.out.println(e);
