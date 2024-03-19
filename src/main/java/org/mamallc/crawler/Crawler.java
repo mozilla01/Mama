@@ -2,7 +2,6 @@ package org.mamallc.crawler;
 
 import org.mamallc.utils.API;
 
-import java.awt.event.KeyEvent;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
@@ -10,11 +9,16 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 
 public class Crawler {
+    private Logger logger;
+    public Crawler(Logger logger) {
+        this.logger = logger;
+    }
 
     public static String decompress(String str) throws Exception {
         byte[] byteCompressed = str.getBytes(StandardCharsets.UTF_8);
@@ -64,7 +68,7 @@ public class Crawler {
 
     boolean checkRobotsTxt(String url, String rootURL) {
         boolean canVisit = true;
-        System.out.println("robots.txt: Checking for " + url);
+//        logger.info("robots.txt: Checking for " + url);
         URLConnection conn = null;
         try {
             conn = new URL(rootURL + "/robots.txt").openConnection();
@@ -97,7 +101,7 @@ public class Crawler {
             }
             sc.close();
         } catch (Exception e) {
-            System.out.println(e);
+            logger.info(e.toString());
         }
         return canVisit;
     }
@@ -112,9 +116,9 @@ public class Crawler {
             Set<String> queue = new HashSet<>();
             String url = API.getNextURL();
 
-            System.out.println("--------------------------------------");
-            System.out.println("Now crawling "+url);
-            System.out.println("--------------------------------------");
+            logger.info("--------------------------------------");
+            logger.info("Now crawling "+url);
+            logger.info("--------------------------------------");
 
             String content = null;
             Page pg = new Page();
@@ -161,17 +165,17 @@ public class Crawler {
                                     completeURL.append(nestedURL);
                                 }
 
-                                System.out.println("-------Robot file checking---------");
+                                logger.info("-------Robot file checking---------");
                                 if (!queue.contains(completeURL.toString())) {
                                     if (checkRobotsTxt(completeURL.toString(), rootURL)) {
-                                        System.out.println("Allowed: " + completeURL);
+//                                        logger.info("Allowed: " + completeURL);
                                         queue.add(completeURL.toString());
                                     } else {
-                                        System.out.println("Disallowed: " + completeURL);
+//                                        logger.info("Disallowed: " + completeURL);
                                     }
                                 }
                             } catch (Exception e) {
-                                System.out.println("Incorrect URL format: "+e);
+                                logger.info("Incorrect URL format: "+e);
                             }
                         }
                         else if (content.charAt(i + 1) == 's' && (content.charAt(i + 2) == 'c' || content.charAt(i+2) == 't') && (content.charAt(i + 3) == 'r' || content.charAt(i+3) == 'y')) {
@@ -192,7 +196,7 @@ public class Crawler {
                             i++;
                         }
                     } catch (StringIndexOutOfBoundsException siob) {
-                        System.out.println(siob);
+                        logger.info(siob.toString());
                     }
                     if (text.length() > 25) text = new StringBuilder();
                     if ((text.toString()) != null && !(text.toString().trim().isEmpty()) && !(text.toString().isBlank())) {
@@ -202,13 +206,6 @@ public class Crawler {
                     }
                     i++;
                 }
-
-                    System.out.println("-----------------Map entries-----------------");
-                    for (Map.Entry entry : pg.textSet.entrySet()) {
-                        String key = entry.getKey().toString();
-                        Integer val = (Integer) entry.getValue();
-                        System.out.println(key+"->"+val);
-                    }
 
             int id = API.insertPage(url);
             API.insertTextIndices(pg.textSet, id);

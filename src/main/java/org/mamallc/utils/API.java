@@ -31,14 +31,13 @@ public class API {
             id = page.getId();
 
         } catch (Exception e) {
-            System.out.println(e);
+            System.out.println("Error in thread "+Thread.currentThread().getName()+": "+e);
         }
         return id;
     }
 
     public static void insertTextIndices(Map<String, Integer> mp, int page) {
         TextIndex[] textIndex = new TextIndex[mp.size()];
-        System.out.println("Building the text index...");
         int count = 0;
         for (Map.Entry<String, Integer> entry : mp.entrySet()) {
             textIndex[count] = new TextIndex();
@@ -50,9 +49,6 @@ public class API {
         try {
             Gson gson = new Gson();
             String jsonRequest = gson.toJson(textIndex);
-            System.out.println(jsonRequest);
-            System.out.println("Text index JSON request:");
-            System.out.println(jsonRequest);
             HttpRequest postRequest = HttpRequest.newBuilder()
                     .uri(new URI(APIURL+"/create-text-indices/"))
                     .header("Content-Type", "application/json")
@@ -63,7 +59,6 @@ public class API {
             HttpResponse<String> postResponse = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
 
         } catch (Exception e) {
-            System.out.println(e);
         }
     }
     public static String getNextURL() {
@@ -85,7 +80,7 @@ public class API {
             // The string is returned with double quotes at beginning and end. So,
             urlString = str.substring(1, end);
         } catch (Exception e) {
-            System.out.println(e);
+
         }
         return urlString;
     }
@@ -110,7 +105,7 @@ public class API {
             HttpClient httpClient = HttpClient.newHttpClient();
             HttpResponse<String> postResponse = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
         } catch (Exception e) {
-            System.out.println(e);
+
         }
     }
 }
