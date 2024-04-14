@@ -1,7 +1,11 @@
 package org.mamallc.utils;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class Page {
-    private String url;
+    private String page_url;
+    private List<String> urls;
     private int id;
 
     public int getId() {
@@ -13,10 +17,18 @@ public class Page {
     }
 
     public String getUrl() {
-        return url;
+        return page_url;
+    }
+
+    public List<String> getURLs() {
+        return urls;
     }
 
     public void setUrl(String url) {
-        this.url = url;
+        this.page_url = url;
+    }
+
+    public void setURLS(List<String> urls) {
+        this.urls = new ArrayList<>(urls);
     }
 }

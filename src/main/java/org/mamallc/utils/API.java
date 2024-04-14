@@ -7,31 +7,33 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Map;
-import java.util.Set;
+import java.util.List;
 
 public class API {
-    private static String APIURL = "http://127.0.0.1:8000/api";
-    public static int insertPage(String url) {
+    private static String APIURLPage = "http://127.0.0.1:8000/api";
+
+    public static int insertPage(List<String> urls, String url) {
         int id = 0;
         try {
             Page page = new Page();
             page.setUrl(url);
+            page.setURLS(urls);
             Gson gson = new Gson();
             String jsonRequest = gson.toJson(page);
             HttpRequest postRequest = HttpRequest.newBuilder()
-                    .uri(new URI(APIURL+"/add-page/"))
+                    .uri(new URI(APIURLPage + "/add-page/"))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(jsonRequest))
                     .build();
 
             HttpClient httpClient = HttpClient.newHttpClient();
             HttpResponse<String> postResponse = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
+            System.out.println(postResponse.body());
 
-            page = gson.fromJson(postResponse.body(), Page.class);
-            id = page.getId();
+            id = Integer.parseInt(postResponse.body());
 
         } catch (Exception e) {
-            System.out.println("Error in thread "+Thread.currentThread().getName()+": "+e);
+            System.out.println("Error in thread " + Thread.currentThread().getName() + ": " + e);
         }
         return id;
     }
@@ -50,24 +52,23 @@ public class API {
             Gson gson = new Gson();
             String jsonRequest = gson.toJson(textIndex);
             HttpRequest postRequest = HttpRequest.newBuilder()
-                    .uri(new URI(APIURL+"/create-text-indices/"))
+                    .uri(new URI(APIURLPage + "/create-text-indices/"))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(jsonRequest))
                     .build();
 
             HttpClient httpClient = HttpClient.newHttpClient();
-            HttpResponse<String> postResponse = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
+            httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
 
         } catch (Exception e) {
         }
     }
+
     public static String getNextURL() {
-        URL url;
         String urlString = null;
         try {
-            Gson gson = new Gson();
             HttpRequest postRequest = HttpRequest.newBuilder()
-                    .uri(new URI(APIURL+"/dequeue/"))
+                    .uri(new URI(APIURLPage + "/dequeue/"))
                     .DELETE()
                     .build();
 
@@ -84,28 +85,5 @@ public class API {
         }
         return urlString;
     }
-    public static void enqueueURLs(Set<String> set) {
-        URL url[] = new URL[set.size()];
-        Gson gson = new Gson();
 
-        int count= 0;
-        for (String urlString : set.stream().toList()) {
-            url[count] = new URL();
-            url[count].setUrl(urlString);
-            count++;
-        }
-        String jsonRequest = gson.toJson(url);
-        try {
-            HttpRequest postRequest = HttpRequest.newBuilder()
-                    .uri(new URI(APIURL + "/enqueue/"))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(jsonRequest))
-                    .build();
-
-            HttpClient httpClient = HttpClient.newHttpClient();
-            HttpResponse<String> postResponse = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
-        } catch (Exception e) {
-
-        }
-    }
 }

@@ -13,9 +13,11 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
+import org.mamallc.utils.URLPage;
 
 public class Crawler {
     private Logger logger;
+
     public Crawler(Logger logger) {
         this.logger = logger;
     }
@@ -40,14 +42,17 @@ public class Crawler {
     }
 
     public static boolean isCompressed(final byte[] compressed) {
-        return (compressed[0] == (byte) (GZIPInputStream.GZIP_MAGIC)) && (compressed[1] == (byte) (GZIPInputStream.GZIP_MAGIC >> 8));
+        return (compressed[0] == (byte) (GZIPInputStream.GZIP_MAGIC))
+                && (compressed[1] == (byte) (GZIPInputStream.GZIP_MAGIC >> 8));
     }
 
     String getRootURL(String url) {
 
         int i = 0;
-        while (url.charAt(i) != '.') i++;
-        while (i < url.length() && url.charAt(i) != '/') i++;
+        while (url.charAt(i) != '.')
+            i++;
+        while (i < url.length() && url.charAt(i) != '/')
+            i++;
         String rootURL = url.substring(0, i);
 
         return rootURL;
@@ -62,13 +67,14 @@ public class Crawler {
             protocol.append(url.charAt(i));
             i++;
         }
-        if (!protocol.toString().equals("http")) valid = false;
+        if (!protocol.toString().equals("http"))
+            valid = false;
         return valid;
     }
 
     boolean checkRobotsTxt(String url, String rootURL) {
         boolean canVisit = true;
-//        logger.info("robots.txt: Checking for " + url);
+        // logger.info("robots.txt: Checking for " + url);
         URLConnection conn = null;
         try {
             conn = new URL(rootURL + "/robots.txt").openConnection();
@@ -80,7 +86,8 @@ public class Crawler {
                 if (arr.length > 1) {
                     if (arr[0].trim().equals("User-agent") && arr[1].trim().equals("*")) {
                         String rule[] = sc.nextLine().split(":");
-                        while (rule.length < 2) rule = sc.nextLine().split(":");
+                        while (rule.length < 2)
+                            rule = sc.nextLine().split(":");
                         String directive = rule[0].trim();
                         String route = rule[1].trim();
                         while (rule[0].trim().equals("Disallow") || rule[0].trim().equals("Allow")) {
@@ -105,19 +112,21 @@ public class Crawler {
         }
         return canVisit;
     }
-    public boolean isPrintableChar( char c ) {
+
+    public boolean isPrintableChar(char c) {
         Character.UnicodeBlock block = Character.UnicodeBlock.of(c);
         return (!Character.isISOControl(c)) &&
                 block != null &&
                 block != Character.UnicodeBlock.SPECIALS;
     }
+
     public void fetchPage() {
         while (true) {
             Set<String> queue = new HashSet<>();
             String url = API.getNextURL();
 
             logger.info("--------------------------------------");
-            logger.info("Now crawling "+url);
+            logger.info("Now crawling " + url);
             logger.info("--------------------------------------");
 
             String content = null;
@@ -150,8 +159,10 @@ public class Crawler {
                         if (content.charAt(i + 1) == 'a' && content.charAt(i + 2) == ' ') {
                             try {
                                 StringBuilder nestedURL = new StringBuilder();
-                                while (content.charAt(++i) != 'h') ;
-                                while (content.charAt(++i) != '"' && content.charAt(i) != '\'') ;
+                                while (content.charAt(++i) != 'h')
+                                    ;
+                                while (content.charAt(++i) != '"' && content.charAt(i) != '\'')
+                                    ;
                                 while (content.charAt(++i) != '"' && content.charAt(i) != '\'') {
                                     nestedURL.append(content.charAt(i));
                                 }
@@ -161,29 +172,33 @@ public class Crawler {
                                 if (checkForProtocol(nestedURL.toString())) {
                                     completeURL = new StringBuilder(nestedURL);
                                 } else {
-                                    if (nestedURL.charAt(0) != '/') completeURL.append('/');
+                                    if (nestedURL.charAt(0) != '/')
+                                        completeURL.append('/');
                                     completeURL.append(nestedURL);
                                 }
 
                                 logger.info("-------Robot file checking---------");
                                 if (!queue.contains(completeURL.toString())) {
                                     if (checkRobotsTxt(completeURL.toString(), rootURL)) {
-//                                        logger.info("Allowed: " + completeURL);
+                                        // logger.info("Allowed: " + completeURL);
                                         queue.add(completeURL.toString());
                                     } else {
-//                                        logger.info("Disallowed: " + completeURL);
+                                        // logger.info("Disallowed: " + completeURL);
                                     }
                                 }
                             } catch (Exception e) {
-                                logger.info("Incorrect URL format: "+e);
+                                logger.info("Incorrect URL format: " + e);
                             }
-                        }
-                        else if (content.charAt(i + 1) == 's' && (content.charAt(i + 2) == 'c' || content.charAt(i+2) == 't') && (content.charAt(i + 3) == 'r' || content.charAt(i+3) == 'y')) {
-                            while(content.charAt(i+1) != '<' || content.charAt(i+2) != '/' || content.charAt(i+3) != 's') {
+                        } else if (content.charAt(i + 1) == 's'
+                                && (content.charAt(i + 2) == 'c' || content.charAt(i + 2) == 't')
+                                && (content.charAt(i + 3) == 'r' || content.charAt(i + 3) == 'y')) {
+                            while (content.charAt(i + 1) != '<' || content.charAt(i + 2) != '/'
+                                    || content.charAt(i + 3) != 's') {
                                 i++;
                             }
                         }
-                        while (content.charAt(++i) != '>') ;
+                        while (content.charAt(++i) != '>')
+                            ;
                         i++;
                         continue;
                     }
@@ -191,15 +206,24 @@ public class Crawler {
                     // Start building the word
                     StringBuilder text = new StringBuilder();
                     try {
-                        while (content.charAt(i) != ';' && content.charAt(i) != '\t' && content.charAt(i) != '\b' && content.charAt(i) != '\0' && content.charAt(i) != ' ' && content.charAt(i) != '?' && content.charAt(i) != '&' && content.charAt(i) != '>' && content.charAt(i) != ')' && content.charAt(i) != '_' && content.charAt(i) != '#' && content.charAt(i) != '(' && content.charAt(i) != '\\' && content.charAt(i) != '/' && content.charAt(i) != '$' && content.charAt(i) != '"' && content.charAt(i) != '\'' && content.charAt(i) != '-' && content.charAt(i) != '<' && content.charAt(i) != ',' && content.charAt(i) != '\r' && content.charAt(i) != '\n' && content.charAt(i) != '.') {
+                        while (content.charAt(i) != ';' && content.charAt(i) != '\t' && content.charAt(i) != '\b'
+                                && content.charAt(i) != '\0' && content.charAt(i) != ' ' && content.charAt(i) != '?'
+                                && content.charAt(i) != '&' && content.charAt(i) != '>' && content.charAt(i) != ')'
+                                && content.charAt(i) != '_' && content.charAt(i) != '#' && content.charAt(i) != '('
+                                && content.charAt(i) != '\\' && content.charAt(i) != '/' && content.charAt(i) != '$'
+                                && content.charAt(i) != '"' && content.charAt(i) != '\'' && content.charAt(i) != '-'
+                                && content.charAt(i) != '<' && content.charAt(i) != ',' && content.charAt(i) != '\r'
+                                && content.charAt(i) != '\n' && content.charAt(i) != '.') {
                             text.append(content.charAt(i));
                             i++;
                         }
                     } catch (StringIndexOutOfBoundsException siob) {
                         logger.info(siob.toString());
                     }
-                    if (text.length() > 25) text = new StringBuilder();
-                    if ((text.toString()) != null && !(text.toString().trim().isEmpty()) && !(text.toString().isBlank())) {
+                    if (text.length() > 25)
+                        text = new StringBuilder();
+                    if ((text.toString()) != null && !(text.toString().trim().isEmpty())
+                            && !(text.toString().isBlank())) {
                         String processedText = text.toString().trim().toLowerCase();
                         pg.textSet.putIfAbsent(processedText, 0);
                         pg.textSet.put(processedText, pg.textSet.get(processedText) + 1);
@@ -207,9 +231,11 @@ public class Crawler {
                     i++;
                 }
 
-            int id = API.insertPage(url);
+            if (queue.contains(url))
+                queue.remove(url);
+            List<String> urls = queue.stream().toList();
+            int id = API.insertPage(urls, url);
             API.insertTextIndices(pg.textSet, id);
-            API.enqueueURLs(queue);
         }
     }
 }
