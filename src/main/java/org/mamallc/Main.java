@@ -20,7 +20,7 @@ public class Main {
         }
         
 
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 8; i++) {
             try {
                 // Create a file handler for thread 1
                 System.out.println("Starting thread "+i);

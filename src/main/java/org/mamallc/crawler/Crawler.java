@@ -5,6 +5,7 @@ import org.mamallc.utils.API;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
@@ -134,7 +135,7 @@ public class Crawler {
             URLConnection conn = null;
 
             try {
-                conn = new URL(url).openConnection();
+                conn = new URI(url).toURL().openConnection();
                 String contentEncoding = conn.getHeaderField("Content-Encoding");
 
                 Scanner sc = new Scanner(conn.getInputStream());

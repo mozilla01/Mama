@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.List;
 
 public class API {
-    private static String APIURLPage = "http://127.0.0.1:8000/api";
+    private static String APIURLPage = "http://192.168.0.105:8000/api";
 
     public static int insertPage(List<String> urls, String url) {
         int id = 0;
@@ -81,7 +81,7 @@ public class API {
             // The string is returned with double quotes at beginning and end. So,
             urlString = str.substring(1, end);
         } catch (Exception e) {
-
+            System.out.println("Getting next URL error: " + e);
         }
         return urlString;
     }
