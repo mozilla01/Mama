@@ -5,22 +5,15 @@ import org.mamallc.utils.API;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
-import java.net.URL;
+import java.net.URI;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
-import org.mamallc.utils.URLPage;
 
 public class Crawler {
-    private Logger logger;
-
-    public Crawler(Logger logger) {
-        this.logger = logger;
-    }
 
     public static String decompress(String str) throws Exception {
         byte[] byteCompressed = str.getBytes(StandardCharsets.UTF_8);
@@ -74,10 +67,9 @@ public class Crawler {
 
     boolean checkRobotsTxt(String url, String rootURL) {
         boolean canVisit = true;
-        // logger.info("robots.txt: Checking for " + url);
         URLConnection conn = null;
         try {
-            conn = new URL(rootURL + "/robots.txt").openConnection();
+            conn = new URI(rootURL + "/robots.txt").toURL().openConnection();
             Scanner sc = new Scanner(conn.getInputStream());
             sc.useDelimiter("\n");
             while (sc.hasNext()) {
@@ -108,7 +100,7 @@ public class Crawler {
             }
             sc.close();
         } catch (Exception e) {
-            logger.info(e.toString());
+            System.out.println(e);
         }
         return canVisit;
     }
@@ -123,18 +115,19 @@ public class Crawler {
     public void fetchPage() {
         while (true) {
             Set<String> queue = new HashSet<>();
-            String url = API.getNextURL();
+            // String url = API.getNextURL();
+            String url = "https://www.reddit.com/r/LocalLLaMA/";
 
-            logger.info("--------------------------------------");
-            logger.info("Now crawling " + url);
-            logger.info("--------------------------------------");
+            System.out.println("--------------------------------------");
+            System.out.println("Now crawling " + url);
+            System.out.println("--------------------------------------");
 
             String content = null;
             Page pg = new Page();
             URLConnection conn = null;
 
             try {
-                conn = new URL(url).openConnection();
+                conn = new URI(url).toURL().openConnection();
                 String contentEncoding = conn.getHeaderField("Content-Encoding");
 
                 Scanner sc = new Scanner(conn.getInputStream());
@@ -150,92 +143,87 @@ public class Crawler {
             }
 
             // Parsing the HTML for words
-            int i = 0;
-            if (content != null && !content.isEmpty())
-                while (i < Objects.requireNonNull(content).length()) {
-                    // We want to skip the html tags and their attributes from the text index
-                    if (content.charAt(i) == '<') {
-                        // In case the tag is an <a> tag, we want to extract the href
-                        if (content.charAt(i + 1) == 'a' && content.charAt(i + 2) == ' ') {
-                            try {
-                                StringBuilder nestedURL = new StringBuilder();
-                                while (content.charAt(++i) != 'h')
-                                    ;
-                                while (content.charAt(++i) != '"' && content.charAt(i) != '\'')
-                                    ;
-                                while (content.charAt(++i) != '"' && content.charAt(i) != '\'') {
-                                    nestedURL.append(content.charAt(i));
-                                }
+            boolean withinAnchor = false;
+            boolean withinAngledBraces = false;
+            boolean withinTag = false;
+            boolean withinURL = false;
+            boolean withinTitle = false;
+            boolean withinBody = false;
+            boolean withinScript = false;
+            boolean withinStyle = false;
 
-                                String rootURL = getRootURL(url);
-                                StringBuilder completeURL = new StringBuilder(rootURL);
-                                if (checkForProtocol(nestedURL.toString())) {
-                                    completeURL = new StringBuilder(nestedURL);
-                                } else {
-                                    if (nestedURL.charAt(0) != '/')
-                                        completeURL.append('/');
-                                    completeURL.append(nestedURL);
-                                }
+            StringBuilder nestedURL = new StringBuilder();
+            StringBuilder title = new StringBuilder();
+            StringBuilder sentence = new StringBuilder();
+            StringBuilder tag = new StringBuilder();
 
-                                logger.info("-------Robot file checking---------");
-                                if (!queue.contains(completeURL.toString())) {
-                                    if (checkRobotsTxt(completeURL.toString(), rootURL)) {
-                                        // logger.info("Allowed: " + completeURL);
-                                        queue.add(completeURL.toString());
-                                    } else {
-                                        // logger.info("Disallowed: " + completeURL);
-                                    }
-                                }
-                            } catch (Exception e) {
-                                logger.info("Incorrect URL format: " + e);
-                            }
-                        } else if (content.charAt(i + 1) == 's'
-                                && (content.charAt(i + 2) == 'c' || content.charAt(i + 2) == 't')
-                                && (content.charAt(i + 3) == 'r' || content.charAt(i + 3) == 'y')) {
-                            while (content.charAt(i + 1) != '<' || content.charAt(i + 2) != '/'
-                                    || content.charAt(i + 3) != 's') {
-                                i++;
-                            }
+            if (content != null || !content.isEmpty() || !content.isBlank()) {
+                for (int stringPointer = 0; stringPointer < content.length(); stringPointer++) {
+                    //Reaching end of opening tag
+                    // Either <tag> or <tag attr="kadfl" ...
+                    if ((content.charAt(stringPointer) == ' ' || content.charAt(stringPointer) == '>') && withinAngledBraces) {
+                        if (content.charAt(stringPointer) == '>') withinAngledBraces = false;
+                        if (withinTag) {
+                            String tagString = tag.toString();
+                            withinTag = false;
+                            // We need to know which tag we are about to enter or leave
+                            if (tagString.equals("script")) withinScript = true;
+                            if (tagString.equals("/script") && withinScript) withinScript = false;
+                            if (tagString.equals("style")) withinStyle = true;
+                            if (tagString.equals("/style") && withinStyle) withinStyle = false;
+                            if (tagString.equals("title") && !withinTitle) withinTitle = true;
+                            if (!withinBody && tagString.equals("body")) withinBody = true;
+                            if (withinBody && tagString.equals("/body")) withinBody = false;
+                            if (tagString.equals("a")) withinAnchor = true;
+                            tag = new StringBuilder();
                         }
-                        while (content.charAt(++i) != '>')
-                            ;
-                        i++;
+                        continue;
+                    }
+                    if (withinURL && content.charAt(stringPointer) == '"') {
+                        withinURL = false;
+                        queue.add(nestedURL.toString());
+                        nestedURL = new StringBuilder();
+                    }
+
+                    if (content.charAt(stringPointer) == '<' && !withinAngledBraces) {
+                        withinAngledBraces = true;
+                        withinTag = true;
+                        if (withinTitle) withinTitle = false;
+                        String sentenceString = sentence.toString().trim();
+                        if (!sentenceString.isEmpty() || !sentenceString.isBlank())
+                            pg.textList.add(sentenceString);
+                        sentence = new StringBuilder();
                         continue;
                     }
 
-                    // Start building the word
-                    StringBuilder text = new StringBuilder();
-                    try {
-                        while (content.charAt(i) != ';' && content.charAt(i) != '\t' && content.charAt(i) != '\b'
-                                && content.charAt(i) != '\0' && content.charAt(i) != ' ' && content.charAt(i) != '?'
-                                && content.charAt(i) != '&' && content.charAt(i) != '>' && content.charAt(i) != ')'
-                                && content.charAt(i) != '_' && content.charAt(i) != '#' && content.charAt(i) != '('
-                                && content.charAt(i) != '\\' && content.charAt(i) != '/' && content.charAt(i) != '$'
-                                && content.charAt(i) != '"' && content.charAt(i) != '\'' && content.charAt(i) != '-'
-                                && content.charAt(i) != '<' && content.charAt(i) != ',' && content.charAt(i) != '\r'
-                                && content.charAt(i) != '\n' && content.charAt(i) != '.') {
-                            text.append(content.charAt(i));
-                            i++;
-                        }
-                    } catch (StringIndexOutOfBoundsException siob) {
-                        logger.info(siob.toString());
+                    if (withinURL) {
+                        nestedURL.append(content.charAt(stringPointer));
                     }
-                    if (text.length() > 25)
-                        text = new StringBuilder();
-                    if ((text.toString()) != null && !(text.toString().trim().isEmpty())
-                            && !(text.toString().isBlank())) {
-                        String processedText = text.toString().trim().toLowerCase();
-                        pg.textSet.putIfAbsent(processedText, 0);
-                        pg.textSet.put(processedText, pg.textSet.get(processedText) + 1);
-                    }
-                    i++;
-                }
 
-            if (queue.contains(url))
-                queue.remove(url);
-            List<String> urls = queue.stream().toList();
-            int id = API.insertPage(urls, url);
-            API.insertTextIndices(pg.textSet, id);
+                    if (withinTitle && !withinBody) {
+                        title.append(content.charAt(stringPointer));
+                    }
+
+                    if (!withinAngledBraces && withinBody && !withinScript && !withinStyle) {
+                        sentence.append(content.charAt(stringPointer));
+                    }
+                    
+                    //Checking to see if we found the href attr in the anchor
+                    if (withinAnchor && !withinURL && content.charAt(stringPointer) == 'h'
+                            && content.charAt(stringPointer + 1) == 'r' && content.charAt(stringPointer + 2) == 'e'
+                            && content.charAt(stringPointer + 3) == 'f') {
+                        while (content.charAt(stringPointer) != '"')
+                            stringPointer++;
+                        withinURL = true;
+                    }
+
+                    if (withinTag)
+                        tag.append(content.charAt(stringPointer));
+                }
+            }
+            System.out.println("Queue: " + queue);
+            System.out.println("Title: " + title.toString().trim());
+            System.out.println("Text list: " + pg.textList);
         }
     }
 }

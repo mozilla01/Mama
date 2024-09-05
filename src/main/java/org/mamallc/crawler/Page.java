@@ -1,11 +1,10 @@
 package org.mamallc.crawler;
 
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
 
 public class Page {
-        public Map<String, Integer> textSet = new HashMap<>();
-        Date lastVisited = new Date();
+        public List<String> textList = new ArrayList<>();
+        // Date lastVisited = new Date();
 
 }

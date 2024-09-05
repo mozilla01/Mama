@@ -13,25 +13,15 @@ import java.util.logging.Level;
 public class Main {
     public static void main(String[] args) {
 
-        Logger logger = Logger.getLogger("");
-        Handler[] handlers = logger.getHandlers();
-        for (Handler handler : handlers) {
-            logger.removeHandler(handler);
-        }
-        
-
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 1; i++) {
             try {
                 // Create a file handler for thread 1
                 System.out.println("Starting thread "+i);
-                FileHandler thread1Handler = new FileHandler("logs/thread"+i+".log");
-                thread1Handler.setFormatter(new SimpleFormatter());
-                logger.addHandler(thread1Handler);
 
-                CrawlerThread crawlerThread = new CrawlerThread(Logger.getLogger("Thread"+i));
+                CrawlerThread crawlerThread = new CrawlerThread();
                 crawlerThread.start();
             } catch (Exception e) {
-                logger.log(Level.SEVERE, e.getMessage());
+                System.out.println(e);
             }
         }
     }
