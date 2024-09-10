@@ -2,86 +2,108 @@ package org.mamallc.utils;
 
 import com.google.gson.Gson;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.util.Date;
+import java.util.Set;
 import java.util.List;
+import java.net.URL;
 
 public class API {
-    private static String APIURLPage = "http://127.0.0.1:8000/api";
+    private static String APIURL = "http://127.0.0.1:8000";
 
-    public static int insertPage(List<String> urls, String url) {
-        int id = 0;
+    public static void insertCrawlEntry(Set<org.mamallc.utils.URL> urls, String url, Set<String> queueOfStrings, List<String> textList) {
         try {
             Page page = new Page();
-            page.setUrl(url);
-            page.setURLS(urls);
+            page.setURL(url);
+            page.setOutgoingURLS(queueOfStrings);
+            page.setLastDate(new Date().toInstant().toString());
+            page.setText(textList);
             Gson gson = new Gson();
             String jsonRequest = gson.toJson(page);
-            HttpRequest postRequest = HttpRequest.newBuilder()
-                    .uri(new URI(APIURLPage + "/add-page/"))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(jsonRequest))
-                    .build();
+            System.out.println(jsonRequest);
+            /*
+             * Add Page
+             * Add page entry to Pages database
+             */
+            URL endpoint = new URI(APIURL+"/pages/create-page").toURL();
 
-            HttpClient httpClient = HttpClient.newHttpClient();
-            HttpResponse<String> postResponse = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
-            System.out.println(postResponse.body());
+            HttpURLConnection con = (HttpURLConnection) endpoint.openConnection();
+            con.setRequestMethod("POST");
+            con.setRequestProperty("Content-Type", "application/json");
+            con.setRequestProperty("Accept", "application/json");
+            con.setDoOutput(true);
 
-            id = Integer.parseInt(postResponse.body());
+            try (OutputStream os = con.getOutputStream()) {
+                byte[] input = jsonRequest.getBytes(StandardCharsets.UTF_8);
+                os.write(input, 0, input.length);
+            }
 
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(con.getInputStream(), StandardCharsets.UTF_8))) {
+                StringBuilder response = new StringBuilder();
+                String responseLine = null;
+                while ((responseLine = br.readLine()) != null) {
+                    response.append(responseLine.trim());
+                }
+                System.out.println(con.getResponseCode() + " " + response);
+            }
+            /*
+             * Enqueue URLs
+             * Add crawlable URLs to the Queue
+             */
+            URLsContainer urlsContainer = new URLsContainer(urls);
+            jsonRequest = gson.toJson(urlsContainer);
+            System.out.println(jsonRequest);
+            endpoint = new URI(APIURL+"/enqueue").toURL();
+
+            con = (HttpURLConnection) endpoint.openConnection();
+            con.setRequestMethod("POST");
+            con.setRequestProperty("Content-Type", "application/json");
+            con.setRequestProperty("Accept", "application/json");
+            con.setDoOutput(true);
+
+            try (OutputStream os = con.getOutputStream()) {
+                byte[] input = jsonRequest.getBytes(StandardCharsets.UTF_8);
+                os.write(input, 0, input.length);
+            }
+
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(con.getInputStream(), StandardCharsets.UTF_8))) {
+                StringBuilder response = new StringBuilder();
+                String responseLine = null;
+                while ((responseLine = br.readLine()) != null) {
+                    response.append(responseLine.trim());
+                }
+                System.out.println(con.getResponseCode() + " " + response);
+            }
         } catch (Exception e) {
             System.out.println("Error in thread " + Thread.currentThread().getName() + ": " + e);
-        }
-        return id;
-    }
-
-    public static void insertTextIndices(Map<String, Integer> mp, int page) {
-        TextIndex[] textIndex = new TextIndex[mp.size()];
-        int count = 0;
-        for (Map.Entry<String, Integer> entry : mp.entrySet()) {
-            textIndex[count] = new TextIndex();
-            textIndex[count].setPage(page);
-            textIndex[count].setWord(entry.getKey());
-            textIndex[count].setFrequency(entry.getValue());
-            count++;
-        }
-        try {
-            Gson gson = new Gson();
-            String jsonRequest = gson.toJson(textIndex);
-            HttpRequest postRequest = HttpRequest.newBuilder()
-                    .uri(new URI(APIURLPage + "/create-text-indices/"))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(jsonRequest))
-                    .build();
-
-            HttpClient httpClient = HttpClient.newHttpClient();
-            httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
-
-        } catch (Exception e) {
         }
     }
 
     public static String getNextURL() {
         String urlString = null;
+        Gson gson = new Gson();
         try {
             HttpRequest postRequest = HttpRequest.newBuilder()
-                    .uri(new URI(APIURLPage + "/dequeue/"))
+                    .uri(new URI(APIURL + "/dequeue"))
                     .DELETE()
                     .build();
 
             HttpClient httpClient = HttpClient.newHttpClient();
             HttpResponse<String> postResponse = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
 
-            String str = postResponse.body();
-            int end = str.length() - 1;
-
-            // The string is returned with double quotes at beginning and end. So,
-            urlString = str.substring(1, end);
+            urlString = gson.fromJson(postResponse.body(), String.class);
         } catch (Exception e) {
-
+            System.out.println(e);
         }
         return urlString;
     }
