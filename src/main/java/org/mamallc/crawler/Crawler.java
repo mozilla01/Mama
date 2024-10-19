@@ -11,7 +11,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import org.mamallc.utils.API;
-import org.mamallc.utils.URL;;
+import org.mamallc.utils.URL;
+import java.io.IOException;
 
 public class Crawler {
 
@@ -67,13 +68,16 @@ public class Crawler {
         return valid;
     }
 
-    boolean checkRobotsTxt(String url, String rootURL) {
+    boolean checkRobotsTxt(String url, String rootURL, Scanner sc) {
         boolean canVisit = true;
         URLConnection conn = null;
+        String currentRoot = getRootURL(url); // Root URL of the URL we are checking
         try {
-            conn = new URI(rootURL + "/robots.txt").toURL().openConnection();
-            Scanner sc = new Scanner(conn.getInputStream());
-            sc.useDelimiter("\n");
+            if (!currentRoot.equals(rootURL)) {
+                conn = new URI(rootURL + "/robots.txt").toURL().openConnection();
+                sc = new Scanner(conn.getInputStream());
+                sc.useDelimiter("\n");
+            }
             while (sc.hasNext()) {
                 String line = sc.nextLine();
                 String arr[] = line.split(":");
@@ -125,6 +129,8 @@ public class Crawler {
 
             String content = null;
             URLConnection conn = null;
+            Scanner robotsScanner = null;
+            String rootURL = getRootURL(url);
 
             try {
                 conn = new URI(url).toURL().openConnection();
@@ -137,6 +143,8 @@ public class Crawler {
                     // content = decompress(content);
                     content = "";
                 }
+
+                conn = new URI(rootURL + "/robots.txt").toURL().openConnection();
                 sc.close();
             } catch (Exception ex) {
                 ex.printStackTrace();
@@ -163,94 +171,101 @@ public class Crawler {
 
             if (content != null && !content.isEmpty() && !content.isBlank()) {
                 // try {
-                    for (int stringPointer = 0; stringPointer < content.length(); stringPointer++) {
-                        // Reaching end of opening tag
-                        // Either <tag> or <tag attr="kadfl" ...
-                        if ((content.charAt(stringPointer) == ' ' || content.charAt(stringPointer) == '>')
-                                && withinAngledBraces) {
-                            if (content.charAt(stringPointer) == '>')
-                                withinAngledBraces = false;
-                            if (withinTag) {
-                                String tagString = tag.toString();
-                                withinTag = false;
-                                // We need to know which tag we are about to enter or leave
-                                if (tagString.equals("script"))
-                                    withinScript = true;
-                                if (tagString.equals("/script") && withinScript)
-                                    withinScript = false;
-                                if (tagString.equals("style"))
-                                    withinStyle = true;
-                                if (tagString.equals("/style") && withinStyle)
-                                    withinStyle = false;
-                                if (tagString.equals("title") && !withinTitle)
-                                    withinTitle = true;
-                                if (!withinBody && tagString.equals("body"))
-                                    withinBody = true;
-                                if (withinBody && tagString.equals("/body"))
-                                    withinBody = false;
-                                if (tagString.equals("a"))
-                                    withinAnchor = true;
-                                tag = new StringBuilder();
-                            }
-                            continue;
+                for (int stringPointer = 0; stringPointer < content.length(); stringPointer++) {
+                    // Reaching end of opening tag
+                    // Either <tag> or <tag attr="kadfl" ...
+                    if ((content.charAt(stringPointer) == ' ' || content.charAt(stringPointer) == '>')
+                            && withinAngledBraces) {
+                        if (content.charAt(stringPointer) == '>')
+                            withinAngledBraces = false;
+                        if (withinTag) {
+                            String tagString = tag.toString();
+                            withinTag = false;
+                            // We need to know which tag we are about to enter or leave
+                            if (tagString.equals("script"))
+                                withinScript = true;
+                            if (tagString.equals("/script") && withinScript)
+                                withinScript = false;
+                            if (tagString.equals("style"))
+                                withinStyle = true;
+                            if (tagString.equals("/style") && withinStyle)
+                                withinStyle = false;
+                            if (tagString.equals("title") && !withinTitle)
+                                withinTitle = true;
+                            if (!withinBody && tagString.equals("body"))
+                                withinBody = true;
+                            if (withinBody && tagString.equals("/body"))
+                                withinBody = false;
+                            if (tagString.equals("a"))
+                                withinAnchor = true;
+                            tag = new StringBuilder();
                         }
-                        if (withinURL && content.charAt(stringPointer) == '"') {
-                            withinURL = false;
-                            String nestedURLString = nestedURL.toString();
-                            int valid = checkForProtocol(nestedURLString);
-                            if (valid == 0) {
-                                queue.add(new URL(nestedURLString));
-                                queueOfStrings.add(nestedURLString);
-                            }
-                            else if (valid == 1) {
-                                queue.add(new URL(nestedURLString.substring(2, nestedURLString.length())));
-                                queueOfStrings.add(nestedURLString.substring(2, nestedURLString.length()));
-                            }
-                            else {
-                                queue.add(new URL(getRootURL(url) + nestedURLString));
-                                queueOfStrings.add(getRootURL(url) + nestedURLString);
-                            }
-                            nestedURL = new StringBuilder();
-                        }
-
-                        if (content.charAt(stringPointer) == '<' && !withinAngledBraces) {
-                            withinAngledBraces = true;
-                            withinTag = true;
-                            if (withinTitle)
-                                withinTitle = false;
-                            String sentenceString = sentence.toString().trim();
-                            if (!sentenceString.isEmpty() || !sentenceString.isBlank())
-                                textList.add(sentenceString);
-                            sentence = new StringBuilder();
-                            continue;
-                        }
-
-                        if (withinURL) {
-                            nestedURL.append(content.charAt(stringPointer));
-                        }
-
-                        if (withinTitle && !withinBody) {
-                            title.append(content.charAt(stringPointer));
-                        }
-
-                        if (!withinAngledBraces && withinBody && !withinScript && !withinStyle) {
-                            sentence.append(content.charAt(stringPointer));
-                        }
-
-                        // Checking to see if we found the href attr in the anchor
-                        if (withinAnchor && !withinURL && content.charAt(stringPointer) == 'h'
-                                && content.charAt(stringPointer + 1) == 'r' && content.charAt(stringPointer + 2) == 'e'
-                                && content.charAt(stringPointer + 3) == 'f') {
-                            while (content.charAt(stringPointer) != '"')
-                                stringPointer++;
-                            withinURL = true;
-                        }
-
-                        if (withinTag)
-                            tag.append(content.charAt(stringPointer));
+                        continue;
                     }
+                    if (withinURL && content.charAt(stringPointer) == '"') {
+                        withinURL = false;
+                        String nestedURLString = nestedURL.toString();
+                        String finalString = "";
+                        int valid = checkForProtocol(nestedURLString);
+                        if (valid == 0) {
+                            finalString = nestedURLString;
+                        } else if (valid == 1) {
+                            finalString = nestedURLString.substring(2, nestedURLString.length());
+                        } else {
+                            finalString = getRootURL(url) + nestedURLString;
+                        }
+                        try {
+                            robotsScanner = new Scanner(conn.getInputStream());
+                            robotsScanner.useDelimiter("\n");
+                        } catch (IOException e) {
+                            System.out.println(e);
+                        }
+                        if (checkRobotsTxt(url, rootURL, robotsScanner)) {
+                            queue.add(new URL(finalString));
+                        } else
+                            System.out.println(url + " is disallowed");
+                        queueOfStrings.add(finalString);
+                        nestedURL = new StringBuilder();
+                    }
+
+                    if (content.charAt(stringPointer) == '<' && !withinAngledBraces) {
+                        withinAngledBraces = true;
+                        withinTag = true;
+                        if (withinTitle)
+                            withinTitle = false;
+                        String sentenceString = sentence.toString().trim();
+                        if (!sentenceString.isEmpty() || !sentenceString.isBlank())
+                            textList.add(sentenceString);
+                        sentence = new StringBuilder();
+                        continue;
+                    }
+
+                    if (withinURL) {
+                        nestedURL.append(content.charAt(stringPointer));
+                    }
+
+                    if (withinTitle && !withinBody) {
+                        title.append(content.charAt(stringPointer));
+                    }
+
+                    if (!withinAngledBraces && withinBody && !withinScript && !withinStyle) {
+                        sentence.append(content.charAt(stringPointer));
+                    }
+
+                    // Checking to see if we found the href attr in the anchor
+                    if (withinAnchor && !withinURL && content.charAt(stringPointer) == 'h'
+                            && content.charAt(stringPointer + 1) == 'r' && content.charAt(stringPointer + 2) == 'e'
+                            && content.charAt(stringPointer + 3) == 'f') {
+                        while (content.charAt(stringPointer) != '"')
+                            stringPointer++;
+                        withinURL = true;
+                    }
+
+                    if (withinTag)
+                        tag.append(content.charAt(stringPointer));
+                }
                 // } catch (StringIndexOutOfBoundsException e) {
-                //     System.out.println(e);
+                // System.out.println(e);
                 // }
                 // System.out.println("Queue: " + queue);
                 // System.out.println("Title: " + title.toString().trim());

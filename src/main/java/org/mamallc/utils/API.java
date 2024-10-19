@@ -20,11 +20,10 @@ public class API {
     private static String APIURL = "http://127.0.0.1:8000";
 
     public static void insertCrawlEntry(
-        Set<org.mamallc.utils.URL> urls,
-        String url,
-        Set<String> queueOfStrings,
-        List<String> textList
-    ) {
+            Set<org.mamallc.utils.URL> urls,
+            String url,
+            Set<String> queueOfStrings,
+            List<String> textList) {
         try {
             Page page = new Page();
             page.setURL(url);
@@ -33,15 +32,13 @@ public class API {
             page.setText(textList);
             Gson gson = new Gson();
             String jsonRequest = gson.toJson(page);
-            System.out.println(jsonRequest);
             /*
              * Add Page
              * Add page entry to Pages database
              */
             URL endpoint = new URI(APIURL + "/pages/create-page").toURL();
 
-            HttpURLConnection con =
-                (HttpURLConnection) endpoint.openConnection();
+            HttpURLConnection con = (HttpURLConnection) endpoint.openConnection();
             con.setRequestMethod("POST");
             con.setRequestProperty("Content-Type", "application/json");
             con.setRequestProperty("Accept", "application/json");
@@ -53,19 +50,15 @@ public class API {
             }
 
             try (
-                BufferedReader br = new BufferedReader(
-                    new InputStreamReader(
-                        con.getInputStream(),
-                        StandardCharsets.UTF_8
-                    )
-                )
-            ) {
+                    BufferedReader br = new BufferedReader(
+                            new InputStreamReader(
+                                    con.getInputStream(),
+                                    StandardCharsets.UTF_8))) {
                 StringBuilder response = new StringBuilder();
                 String responseLine = null;
                 while ((responseLine = br.readLine()) != null) {
                     response.append(responseLine.trim());
                 }
-                System.out.println(con.getResponseCode() + " " + response);
             }
             /*
              * Enqueue URLs
@@ -73,7 +66,6 @@ public class API {
              */
             URLsContainer urlsContainer = new URLsContainer(urls);
             jsonRequest = gson.toJson(urlsContainer);
-            System.out.println(jsonRequest);
             endpoint = new URI(APIURL + "/enqueue").toURL();
 
             con = (HttpURLConnection) endpoint.openConnection();
@@ -88,24 +80,19 @@ public class API {
             }
 
             try (
-                BufferedReader br = new BufferedReader(
-                    new InputStreamReader(
-                        con.getInputStream(),
-                        StandardCharsets.UTF_8
-                    )
-                )
-            ) {
+                    BufferedReader br = new BufferedReader(
+                            new InputStreamReader(
+                                    con.getInputStream(),
+                                    StandardCharsets.UTF_8))) {
                 StringBuilder response = new StringBuilder();
                 String responseLine = null;
                 while ((responseLine = br.readLine()) != null) {
                     response.append(responseLine.trim());
                 }
-                System.out.println(con.getResponseCode() + " " + response);
             }
         } catch (Exception e) {
             System.out.println(
-                "Error in thread " + Thread.currentThread().getName() + ": " + e
-            );
+                    "Error in thread " + Thread.currentThread().getName() + ": " + e);
         }
     }
 
@@ -114,15 +101,14 @@ public class API {
         Gson gson = new Gson();
         try {
             HttpRequest postRequest = HttpRequest.newBuilder()
-                .uri(new URI(APIURL + "/dequeue"))
-                .DELETE()
-                .build();
+                    .uri(new URI(APIURL + "/dequeue"))
+                    .DELETE()
+                    .build();
 
             HttpClient httpClient = HttpClient.newHttpClient();
             HttpResponse<String> postResponse = httpClient.send(
-                postRequest,
-                HttpResponse.BodyHandlers.ofString()
-            );
+                    postRequest,
+                    HttpResponse.BodyHandlers.ofString());
 
             urlString = gson.fromJson(postResponse.body(), String.class);
         } catch (Exception e) {
