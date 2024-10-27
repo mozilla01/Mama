@@ -73,7 +73,10 @@ public class Crawler {
         URLConnection conn = null;
         String currentRoot = getRootURL(url); // Root URL of the URL we are checking
         try {
+            System.out.println("Root URL: " + rootURL);
+            System.out.println("Current Root: " + currentRoot);
             if (!currentRoot.equals(rootURL)) {
+                System.out.println("Root mismatch: " + url);
                 conn = new URI(rootURL + "/robots.txt").toURL().openConnection();
                 sc = new Scanner(conn.getInputStream());
                 sc.useDelimiter("\n");
@@ -118,160 +121,177 @@ public class Crawler {
                 block != Character.UnicodeBlock.SPECIALS;
     }
 
+    public void crawlPage(String url) {
+        System.out.println("--------------------------------------");
+        System.out.println("Now crawling " + url);
+        System.out.println("--------------------------------------");
+
+        String content = null;
+        URLConnection conn = null;
+        Scanner robotsScanner = null;
+        String rootURL = getRootURL(url);
+
+        try {
+            conn = new URI(url).toURL().openConnection();
+            String contentEncoding = conn.getHeaderField("Content-Encoding");
+
+            Scanner sc = new Scanner(conn.getInputStream());
+            sc.useDelimiter("\\Z");
+            content = sc.next();
+            if (contentEncoding != null && contentEncoding.equals("gzip")) {
+                // content = decompress(content);
+                content = "";
+            }
+
+            conn = new URI(rootURL + "/robots.txt").toURL().openConnection();
+            sc.close();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        // Parsing the HTML for words
+        boolean withinAnchor = false;
+        boolean withinAngledBraces = false;
+        boolean withinTag = false;
+        boolean withinURL = false;
+        boolean withinTitle = false;
+        boolean withinBody = false;
+        boolean withinScript = false;
+        boolean withinStyle = false;
+        boolean usefulText = false;
+
+        StringBuilder nestedURL = new StringBuilder();
+        StringBuilder title = new StringBuilder();
+        StringBuilder sentence = new StringBuilder();
+        StringBuilder tag = new StringBuilder();
+        StringBuilder lastTextTag = new StringBuilder();
+        StringBuilder anchorText = new StringBuilder();
+
+        List<String> textList = new ArrayList<>();
+        Set<String> queueOfStrings = new HashSet<>();
+        Set<URL> queue = new HashSet<>();
+
+        if (content != null && !content.isEmpty() && !content.isBlank()) {
+            // try {
+            for (int stringPointer = 0; stringPointer < content.length(); stringPointer++) {
+                // Reaching end of opening tag
+                // Either <tag> or <tag attr="kadfl" ...
+                if ((content.charAt(stringPointer) == ' ' || content.charAt(stringPointer) == '>')
+                        && withinAngledBraces) {
+                    if (content.charAt(stringPointer) == '>')
+                        withinAngledBraces = false;
+                    if (withinTag) {
+                        String tagString = tag.toString();
+                        withinTag = false;
+                        // We need to know which tag we are about to enter or leave
+                        if (tagString.equals("script"))
+                            withinScript = true;
+                        if (tagString.equals("/script") && withinScript)
+                            withinScript = false;
+                        if (tagString.equals("style"))
+                            withinStyle = true;
+                        if (tagString.equals("/style") && withinStyle)
+                            withinStyle = false;
+                        if (tagString.equals("title") && !withinTitle)
+                            withinTitle = true;
+                        if (!withinBody && tagString.equals("body"))
+                            withinBody = true;
+                        if (withinBody && tagString.equals("/body"))
+                            withinBody = false;
+                        if (tagString.equals("a"))
+                            withinAnchor = true;
+                        if (tagString.equals("/a"))
+                            withinAnchor = false;
+                        if (tagString.equals("p") || (tag.length() > 0 && tagString.charAt(0) == 'h')) {
+                            usefulText = true;
+                            lastTextTag = new StringBuilder(tagString);
+                        }
+                        if (tagString.equals("/" + lastTextTag.toString())) {
+                            usefulText = false;
+                            lastTextTag = new StringBuilder();
+                        }
+                        tag = new StringBuilder();
+                    }
+                    continue;
+                }
+                if (withinURL && content.charAt(stringPointer) == '"') {
+                    withinURL = false;
+                    String nestedURLString = nestedURL.toString();
+                    String finalString = "";
+                    int valid = checkForProtocol(nestedURLString);
+                    if (valid == 0) {
+                        finalString = nestedURLString;
+                    } else if (valid == 1) {
+                        finalString = nestedURLString.substring(2, nestedURLString.length());
+                    } else {
+                        finalString = getRootURL(url) + nestedURLString;
+                    }
+                    try {
+                        robotsScanner = new Scanner(conn.getInputStream());
+                        robotsScanner.useDelimiter("\n");
+                    } catch (IOException e) {
+                        System.out.println(e);
+                    }
+                    if (checkRobotsTxt(finalString, rootURL, robotsScanner))
+                        queue.add(new URL(finalString));
+                    else
+                        System.out.println(finalString + " is disallowed");
+                    queueOfStrings.add(finalString);
+                    nestedURL = new StringBuilder();
+                }
+
+                if (content.charAt(stringPointer) == '<' && !withinAngledBraces) {
+                    withinAngledBraces = true;
+                    withinTag = true;
+                    if (withinTitle)
+                        withinTitle = false;
+                    String sentenceString = sentence.toString().trim();
+                    if (!sentenceString.isEmpty() || !sentenceString.isBlank())
+                        textList.add(sentenceString);
+                    sentence = new StringBuilder();
+                    continue;
+                }
+
+                if (withinURL) {
+                    nestedURL.append(content.charAt(stringPointer));
+                }
+
+                if (withinTitle && !withinBody) {
+                    title.append(content.charAt(stringPointer));
+                }
+
+                if (!withinAngledBraces && withinBody && !withinScript && !withinStyle && usefulText) {
+                    sentence.append(content.charAt(stringPointer));
+                    if (withinAnchor)
+                        anchorText.append(content.charAt(stringPointer));
+                }
+
+                // Checking to see if we found the href attr in the anchor
+                if (withinAnchor && !withinURL && content.charAt(stringPointer) == 'h'
+                        && content.charAt(stringPointer + 1) == 'r' && content.charAt(stringPointer + 2) == 'e'
+                        && content.charAt(stringPointer + 3) == 'f') {
+                    while (content.charAt(stringPointer) != '"')
+                        stringPointer++;
+                    withinURL = true;
+                }
+
+                if (withinTag)
+                    tag.append(content.charAt(stringPointer));
+            }
+            // } catch (StringIndexOutOfBoundsException e) {
+            // System.out.println(e);
+            // }
+            // System.out.println("Queue: " + queue);
+            // System.out.println("Title: " + title.toString().trim());
+            // System.out.println("Text list: " + textList);
+            API.insertCrawlEntry(queue, url, queueOfStrings, textList, title.toString().trim());
+        }
+    }
+
     public void fetchPage() {
         while (true) {
             String url = API.getNextURL();
-            // String url = "https://www.merriam-webster.com/word-of-the-day";
-
-            System.out.println("--------------------------------------");
-            System.out.println("Now crawling " + url);
-            System.out.println("--------------------------------------");
-
-            String content = null;
-            URLConnection conn = null;
-            Scanner robotsScanner = null;
-            String rootURL = getRootURL(url);
-
-            try {
-                conn = new URI(url).toURL().openConnection();
-                String contentEncoding = conn.getHeaderField("Content-Encoding");
-
-                Scanner sc = new Scanner(conn.getInputStream());
-                sc.useDelimiter("\\Z");
-                content = sc.next();
-                if (contentEncoding != null && contentEncoding.equals("gzip")) {
-                    // content = decompress(content);
-                    content = "";
-                }
-
-                conn = new URI(rootURL + "/robots.txt").toURL().openConnection();
-                sc.close();
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
-
-            // Parsing the HTML for words
-            boolean withinAnchor = false;
-            boolean withinAngledBraces = false;
-            boolean withinTag = false;
-            boolean withinURL = false;
-            boolean withinTitle = false;
-            boolean withinBody = false;
-            boolean withinScript = false;
-            boolean withinStyle = false;
-
-            StringBuilder nestedURL = new StringBuilder();
-            StringBuilder title = new StringBuilder();
-            StringBuilder sentence = new StringBuilder();
-            StringBuilder tag = new StringBuilder();
-
-            List<String> textList = new ArrayList<>();
-            Set<String> queueOfStrings = new HashSet<>();
-            Set<URL> queue = new HashSet<>();
-
-            if (content != null && !content.isEmpty() && !content.isBlank()) {
-                // try {
-                for (int stringPointer = 0; stringPointer < content.length(); stringPointer++) {
-                    // Reaching end of opening tag
-                    // Either <tag> or <tag attr="kadfl" ...
-                    if ((content.charAt(stringPointer) == ' ' || content.charAt(stringPointer) == '>')
-                            && withinAngledBraces) {
-                        if (content.charAt(stringPointer) == '>')
-                            withinAngledBraces = false;
-                        if (withinTag) {
-                            String tagString = tag.toString();
-                            withinTag = false;
-                            // We need to know which tag we are about to enter or leave
-                            if (tagString.equals("script"))
-                                withinScript = true;
-                            if (tagString.equals("/script") && withinScript)
-                                withinScript = false;
-                            if (tagString.equals("style"))
-                                withinStyle = true;
-                            if (tagString.equals("/style") && withinStyle)
-                                withinStyle = false;
-                            if (tagString.equals("title") && !withinTitle)
-                                withinTitle = true;
-                            if (!withinBody && tagString.equals("body"))
-                                withinBody = true;
-                            if (withinBody && tagString.equals("/body"))
-                                withinBody = false;
-                            if (tagString.equals("a"))
-                                withinAnchor = true;
-                            tag = new StringBuilder();
-                        }
-                        continue;
-                    }
-                    if (withinURL && content.charAt(stringPointer) == '"') {
-                        withinURL = false;
-                        String nestedURLString = nestedURL.toString();
-                        String finalString = "";
-                        int valid = checkForProtocol(nestedURLString);
-                        if (valid == 0) {
-                            finalString = nestedURLString;
-                        } else if (valid == 1) {
-                            finalString = nestedURLString.substring(2, nestedURLString.length());
-                        } else {
-                            finalString = getRootURL(url) + nestedURLString;
-                        }
-                        try {
-                            robotsScanner = new Scanner(conn.getInputStream());
-                            robotsScanner.useDelimiter("\n");
-                        } catch (IOException e) {
-                            System.out.println(e);
-                        }
-                        if (checkRobotsTxt(url, rootURL, robotsScanner)) {
-                            queue.add(new URL(finalString));
-                        } else
-                            System.out.println(url + " is disallowed");
-                        queueOfStrings.add(finalString);
-                        nestedURL = new StringBuilder();
-                    }
-
-                    if (content.charAt(stringPointer) == '<' && !withinAngledBraces) {
-                        withinAngledBraces = true;
-                        withinTag = true;
-                        if (withinTitle)
-                            withinTitle = false;
-                        String sentenceString = sentence.toString().trim();
-                        if (!sentenceString.isEmpty() || !sentenceString.isBlank())
-                            textList.add(sentenceString);
-                        sentence = new StringBuilder();
-                        continue;
-                    }
-
-                    if (withinURL) {
-                        nestedURL.append(content.charAt(stringPointer));
-                    }
-
-                    if (withinTitle && !withinBody) {
-                        title.append(content.charAt(stringPointer));
-                    }
-
-                    if (!withinAngledBraces && withinBody && !withinScript && !withinStyle) {
-                        sentence.append(content.charAt(stringPointer));
-                    }
-
-                    // Checking to see if we found the href attr in the anchor
-                    if (withinAnchor && !withinURL && content.charAt(stringPointer) == 'h'
-                            && content.charAt(stringPointer + 1) == 'r' && content.charAt(stringPointer + 2) == 'e'
-                            && content.charAt(stringPointer + 3) == 'f') {
-                        while (content.charAt(stringPointer) != '"')
-                            stringPointer++;
-                        withinURL = true;
-                    }
-
-                    if (withinTag)
-                        tag.append(content.charAt(stringPointer));
-                }
-                // } catch (StringIndexOutOfBoundsException e) {
-                // System.out.println(e);
-                // }
-                // System.out.println("Queue: " + queue);
-                // System.out.println("Title: " + title.toString().trim());
-                // System.out.println("Text list: " + textList);
-                API.insertCrawlEntry(queue, url, queueOfStrings, textList);
-            }
+            crawlPage(url);
         }
     }
 }

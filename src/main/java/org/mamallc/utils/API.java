@@ -23,12 +23,13 @@ public class API {
             Set<org.mamallc.utils.URL> urls,
             String url,
             Set<String> queueOfStrings,
-            List<String> textList) {
+            List<String> textList, String title) {
         try {
             Page page = new Page();
             page.setURL(url);
             page.setOutgoingURLS(queueOfStrings);
             page.setLastDate(new Date().toInstant().toString());
+            page.setTitle(title);
             page.setText(textList);
             Gson gson = new Gson();
             String jsonRequest = gson.toJson(page);

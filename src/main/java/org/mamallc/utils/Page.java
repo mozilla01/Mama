@@ -9,6 +9,8 @@ public class Page {
     private String url;
     private Set<String> outgoing;
     private List<String> text;
+    private String title;
+    private String anchorText;
     private String last_crawled;
     
     public String getURL() {
@@ -17,6 +19,14 @@ public class Page {
 
     public Set<String> getOutgoingURLs() {
         return outgoing;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public void setAnchorText(String anchorText) {
+        this.anchorText = anchorText;
     }
 
     public List<String> getText() {
