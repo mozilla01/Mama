@@ -73,10 +73,7 @@ public class Crawler {
         URLConnection conn = null;
         String currentRoot = getRootURL(url); // Root URL of the URL we are checking
         try {
-            System.out.println("Root URL: " + rootURL);
-            System.out.println("Current Root: " + currentRoot);
             if (!currentRoot.equals(rootURL)) {
-                System.out.println("Root mismatch: " + url);
                 conn = new URI(rootURL + "/robots.txt").toURL().openConnection();
                 sc = new Scanner(conn.getInputStream());
                 sc.useDelimiter("\n");
@@ -200,8 +197,38 @@ public class Crawler {
                             withinBody = false;
                         if (tagString.equals("a"))
                             withinAnchor = true;
-                        if (tagString.equals("/a"))
+                        if (tagString.equals("/a")) {
                             withinAnchor = false;
+                            String nestedURLString = nestedURL.toString();
+                            String finalString = "";
+                            int valid = checkForProtocol(nestedURLString);
+                            if (valid == 0) {
+                                finalString = nestedURLString;
+                            } else if (valid == 1) {
+                                finalString = nestedURLString.substring(2, nestedURLString.length());
+                            } else {
+                                finalString = getRootURL(url) + nestedURLString;
+                            }
+                            try {
+                                robotsScanner = new Scanner(conn.getInputStream());
+                                robotsScanner.useDelimiter("\n");
+                            } catch (IOException e) {
+                                System.out.println(e);
+                            }
+                            URL queueURL = new URL(finalString);
+                            String anchorTextString = anchorText.toString().trim().strip();
+                            queueURL.setAnchorText(anchorTextString);
+                            if (checkRobotsTxt(finalString, rootURL, robotsScanner)) {
+                                queueURL.setRespect(true);
+                            } else {
+                                queueURL.setRespect(false);
+                                System.out.println(finalString + " is disallowed");
+                            }
+                            queue.add(queueURL);
+                            queueOfStrings.add(finalString);
+                            nestedURL = new StringBuilder();
+                            anchorText = new StringBuilder();
+                        }
                         if (tagString.equals("p") || (tag.length() > 0 && tagString.charAt(0) == 'h')) {
                             usefulText = true;
                             lastTextTag = new StringBuilder(tagString);
@@ -216,28 +243,6 @@ public class Crawler {
                 }
                 if (withinURL && content.charAt(stringPointer) == '"') {
                     withinURL = false;
-                    String nestedURLString = nestedURL.toString();
-                    String finalString = "";
-                    int valid = checkForProtocol(nestedURLString);
-                    if (valid == 0) {
-                        finalString = nestedURLString;
-                    } else if (valid == 1) {
-                        finalString = nestedURLString.substring(2, nestedURLString.length());
-                    } else {
-                        finalString = getRootURL(url) + nestedURLString;
-                    }
-                    try {
-                        robotsScanner = new Scanner(conn.getInputStream());
-                        robotsScanner.useDelimiter("\n");
-                    } catch (IOException e) {
-                        System.out.println(e);
-                    }
-                    if (checkRobotsTxt(finalString, rootURL, robotsScanner))
-                        queue.add(new URL(finalString));
-                    else
-                        System.out.println(finalString + " is disallowed");
-                    queueOfStrings.add(finalString);
-                    nestedURL = new StringBuilder();
                 }
 
                 if (content.charAt(stringPointer) == '<' && !withinAngledBraces) {
@@ -245,6 +250,8 @@ public class Crawler {
                     withinTag = true;
                     if (withinTitle)
                         withinTitle = false;
+                    if (withinAnchor)
+                        anchorText.append(" ");
                     String sentenceString = sentence.toString().trim();
                     if (!sentenceString.isEmpty() || !sentenceString.isBlank())
                         textList.add(sentenceString);

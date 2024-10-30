@@ -2,7 +2,8 @@ package org.mamallc.utils;
 
 public class URL {
     private String url;
-    private String anchorText;
+    private String anchor_text;
+    private boolean respects_robots;
 
     public String getURL() {
         return url;
@@ -16,7 +17,11 @@ public class URL {
         this.url = url;
     }
 
-    public void setAnchorText(String anchorText) {
-        this.anchorText = anchorText;
+    public void setAnchorText(String anchor_text) {
+        this.anchor_text = anchor_text;
+    }
+
+    public void setRespect(boolean respects_robots) {
+        this.respects_robots = respects_robots;
     }
 }
