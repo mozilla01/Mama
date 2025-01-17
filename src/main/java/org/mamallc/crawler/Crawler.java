@@ -40,6 +40,24 @@ public class Crawler {
                 && (compressed[1] == (byte) (GZIPInputStream.GZIP_MAGIC >> 8));
     }
 
+    public static String removeUTFStrings(String str) {
+        return str.replace("&#x2F;", "/").replace("&#x3D;", "=").replace("&#x26;", "&")
+                .replace("&#x3F;", "?").replace("&#x25;", "%").replace("&#x3A;", ":")
+                .replace("&#x2C;", ",").replace("&#x2D;", "-").replace("&#x2E;", ".").replace("&#x23;", "#")
+                .replace("&#x3B;", ";").replace("&#x3C;", "<").replace("&#x3E;", ">").replace("&#x40;", "@")
+                .replace("&#x5F;", "_").replace("&#x7E;", "~").replace("&#x5B;", "[").replace("&#x5D;", "]")
+                .replace("&#x7B;", "{").replace("&#x7D;", "}").replace("&#x7C;", "|").replace("&#x60;", "`")
+                .replace("&#x22;", "\"").replace("&#x27;", "'").replace("&#x3E;", ">").replace("&#x3C;", "<")
+                .replace("&#x5C;", "\\").replace("&#x24;", "$").replace("&#x40;", "@").replace("&#x2B;", "+")
+                .replace("&#x3D;", "=").replace("&#x2A;", "*").replace("&#x25;", "%").replace("&#x5E;", "^")
+                .replace("&#x21;", "!").replace("&#x3F;", "?").replace("&#x40;", "@").replace("&#x2C;", ",")
+                .replace("&#x2E;", ".").replace("&#x2F;", "/").replace("&#x3A;", ":").replace("&#x3B;", ";")
+                .replace("&#x3D;", "=").replace("&#x3F;", "?").replace("&#x40;", "@").replace("&#x5B;", "[")
+                .replace("&#x5C;", "\\").replace("&#x5D;", "]").replace("&#x5E;", "^").replace("&#x5F;", "_")
+                .replace("&#x60;", "`").replace("&#x7B;", "{").replace("&#x7C;", "|").replace("&#x7D;", "}")
+                .replace("&#x7E;", "~");
+    }
+
     String getRootURL(String url) {
 
         int i = 0;
@@ -209,6 +227,8 @@ public class Crawler {
                             } else {
                                 finalString = getRootURL(url) + nestedURLString;
                             }
+                            // Replace possible UTF-8 characters with symbols
+                            finalString = removeUTFStrings(finalString);
                             try {
                                 robotsScanner = new Scanner(conn.getInputStream());
                                 robotsScanner.useDelimiter("\n");
@@ -285,12 +305,6 @@ public class Crawler {
                 if (withinTag)
                     tag.append(content.charAt(stringPointer));
             }
-            // } catch (StringIndexOutOfBoundsException e) {
-            // System.out.println(e);
-            // }
-            // System.out.println("Queue: " + queue);
-            // System.out.println("Title: " + title.toString().trim());
-            // System.out.println("Text list: " + textList);
             API.insertCrawlEntry(queue, url, queueOfStrings, textList, title.toString().trim());
         }
     }
