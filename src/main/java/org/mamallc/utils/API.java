@@ -23,7 +23,7 @@ public class API {
             Set<org.mamallc.utils.URL> urls,
             String url,
             Set<String> queueOfStrings,
-            List<String> textList, String title) {
+            List<String> textList, String title, String description, String keywords) {
         try {
             Page page = new Page();
             page.setURL(url);
@@ -31,6 +31,8 @@ public class API {
             page.setLastDate(new Date().toInstant().toString());
             page.setTitle(title);
             page.setText(textList);
+            page.setDescription(description);
+            page.setKeywords(keywords);
             Gson gson = new Gson();
             String jsonRequest = gson.toJson(page);
             /*
@@ -97,8 +99,8 @@ public class API {
         }
     }
 
-    public static String getNextURL() {
-        String urlString = null;
+    public static String[] getNextURL() {
+        String urlStrings[] = {};
         Gson gson = new Gson();
         try {
             HttpRequest postRequest = HttpRequest.newBuilder()
@@ -111,10 +113,14 @@ public class API {
                     postRequest,
                     HttpResponse.BodyHandlers.ofString());
 
-            urlString = gson.fromJson(postResponse.body(), String.class);
+            System.out.println("Response: " + postResponse.body());
+            urlStrings = gson.fromJson(postResponse.body(), String[].class);
+            ;
+        } catch (com.google.gson.JsonSyntaxException e) {
+            System.out.println("Error parsing JSON response: " + e.getMessage());
         } catch (Exception e) {
-            System.out.println(e);
+            System.out.println("Error during API call: " + e.getMessage());
         }
-        return urlString;
+        return urlStrings;
     }
 }

@@ -3,7 +3,6 @@ package org.mamallc.utils;
 public class URL {
     private String url;
     private String anchor_text;
-    private boolean respects_robots;
 
     public String getURL() {
         return url;
@@ -21,7 +20,4 @@ public class URL {
         this.anchor_text = anchor_text;
     }
 
-    public void setRespect(boolean respects_robots) {
-        this.respects_robots = respects_robots;
-    }
 }

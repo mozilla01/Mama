@@ -12,7 +12,6 @@ import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import org.mamallc.utils.API;
 import org.mamallc.utils.URL;
-import java.io.IOException;
 
 public class Crawler {
 
@@ -59,14 +58,17 @@ public class Crawler {
     }
 
     String getRootURL(String url) {
-
-        int i = 0;
-        while (url.charAt(i) != '.')
-            i++;
-        while (i < url.length() && url.charAt(i) != '/')
-            i++;
-        String rootURL = url.substring(0, i);
-
+        String rootURL = "https://example.com";
+        try {
+            int i = 0;
+            while (url.charAt(i) != '.')
+                i++;
+            while (i < url.length() && url.charAt(i) != '/')
+                i++;
+            rootURL = url.substring(0, i);
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
         return rootURL;
     }
 
@@ -80,9 +82,14 @@ public class Crawler {
             i++;
         }
         if (protocol.length() > 1 && protocol.charAt(0) == '/' && protocol.charAt(1) == '/')
-            valid = 1;
-        else if (!protocol.toString().equals("http"))
-            valid = 2;
+            valid = 1; // Unusual URL, do not append
+        else if ((protocol.length() > 1 && protocol.charAt(0) == '/' && protocol.charAt(1) != '/')
+                || (protocol.length() == 1 && protocol.charAt(0) == '/'))
+            valid = 2; // Simple nested route, append root
+        else if (protocol.toString().equals("http"))
+            valid = 3; // Regular URL, do not append
+        else
+            valid = 4; // Another domain, like ab.wikipedia.org
         return valid;
     }
 
@@ -143,7 +150,6 @@ public class Crawler {
 
         String content = null;
         URLConnection conn = null;
-        Scanner robotsScanner = null;
         String rootURL = getRootURL(url);
 
         try {
@@ -157,8 +163,6 @@ public class Crawler {
                 // content = decompress(content);
                 content = "";
             }
-
-            conn = new URI(rootURL + "/robots.txt").toURL().openConnection();
             sc.close();
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -173,14 +177,16 @@ public class Crawler {
         boolean withinBody = false;
         boolean withinScript = false;
         boolean withinStyle = false;
-        boolean usefulText = false;
+        boolean withinMeta = false;
 
         StringBuilder nestedURL = new StringBuilder();
         StringBuilder title = new StringBuilder();
         StringBuilder sentence = new StringBuilder();
         StringBuilder tag = new StringBuilder();
-        StringBuilder lastTextTag = new StringBuilder();
         StringBuilder anchorText = new StringBuilder();
+        StringBuilder metaAttributes = new StringBuilder();
+        String metaDescription = "";
+        String metaKeywords = "";
 
         List<String> textList = new ArrayList<>();
         Set<String> queueOfStrings = new HashSet<>();
@@ -193,16 +199,51 @@ public class Crawler {
                 // Either <tag> or <tag attr="kadfl" ...
                 if ((content.charAt(stringPointer) == ' ' || content.charAt(stringPointer) == '>')
                         && withinAngledBraces) {
-                    if (content.charAt(stringPointer) == '>')
+                    if (content.charAt(stringPointer) == '>') {
                         withinAngledBraces = false;
+                        if (tag.toString().isEmpty() && withinMeta) {
+                            withinMeta = false;
+                            String[] metaArr = metaAttributes.toString().split("\" ");
+                            String metaName = "";
+                            for (String attr : metaArr) {
+                                String[] attrArr = attr.split("=");
+                                String key = "", value = "";
+                                if (attrArr.length > 1) {
+                                    key = attrArr[0].trim();
+                                    value = attrArr[1].trim().replace("\"", "");
+                                }
+                                if (key.equals("name") && value.equals("description")) {
+                                    metaName = "description";
+                                }
+                                if (key.equals("name") && value.equals("keywords")) {
+                                    System.out.println("Found keywords");
+                                    metaName = "keywords";
+                                }
+                                if (key.equals("content") && metaName.equals("description")) {
+                                    metaDescription = value;
+                                    metaName = "";
+                                }
+                                if (key.equals("content") && metaName.equals("keywords")) {
+                                    metaKeywords = value;
+                                    metaName = "";
+                                }
+                            }
+                            metaAttributes = new StringBuilder();
+                        }
+                    }
+                    if (withinMeta && content.charAt(stringPointer) == ' ') {
+                        metaAttributes.append(' ');
+                    }
                     if (withinTag) {
-                        String tagString = tag.toString();
+                        String tagString = tag.toString().strip();
                         withinTag = false;
                         // We need to know which tag we are about to enter or leave
                         if (tagString.equals("script"))
                             withinScript = true;
                         if (tagString.equals("/script") && withinScript)
                             withinScript = false;
+                        if (tagString.equals("meta"))
+                            withinMeta = true;
                         if (tagString.equals("style"))
                             withinStyle = true;
                         if (tagString.equals("/style") && withinStyle)
@@ -220,42 +261,26 @@ public class Crawler {
                             String nestedURLString = nestedURL.toString();
                             String finalString = "";
                             int valid = checkForProtocol(nestedURLString);
-                            if (valid == 0) {
+                            if (valid == 0 || valid == 3) {
                                 finalString = nestedURLString;
                             } else if (valid == 1) {
-                                finalString = nestedURLString.substring(2, nestedURLString.length());
-                            } else {
-                                finalString = getRootURL(url) + nestedURLString;
+                                finalString = "https:" + nestedURLString;
+                            } else if (valid == 2) {
+                                finalString = rootURL + nestedURLString;
+                            } else if (valid == 4) {
+                                finalString = "https://" + nestedURLString;
                             }
                             // Replace possible UTF-8 characters with symbols
                             finalString = removeUTFStrings(finalString);
-                            try {
-                                robotsScanner = new Scanner(conn.getInputStream());
-                                robotsScanner.useDelimiter("\n");
-                            } catch (IOException e) {
-                                System.out.println(e);
-                            }
+
                             URL queueURL = new URL(finalString);
                             String anchorTextString = anchorText.toString().trim().strip();
                             queueURL.setAnchorText(anchorTextString);
-                            if (checkRobotsTxt(finalString, rootURL, robotsScanner)) {
-                                queueURL.setRespect(true);
-                            } else {
-                                queueURL.setRespect(false);
-                                System.out.println(finalString + " is disallowed");
-                            }
+
                             queue.add(queueURL);
                             queueOfStrings.add(finalString);
                             nestedURL = new StringBuilder();
                             anchorText = new StringBuilder();
-                        }
-                        if (tagString.equals("p") || (tag.length() > 0 && tagString.charAt(0) == 'h')) {
-                            usefulText = true;
-                            lastTextTag = new StringBuilder(tagString);
-                        }
-                        if (tagString.equals("/" + lastTextTag.toString())) {
-                            usefulText = false;
-                            lastTextTag = new StringBuilder();
                         }
                         tag = new StringBuilder();
                     }
@@ -283,11 +308,11 @@ public class Crawler {
                     nestedURL.append(content.charAt(stringPointer));
                 }
 
-                if (withinTitle && !withinBody) {
+                if (withinTitle && !withinBody && !withinAngledBraces) {
                     title.append(content.charAt(stringPointer));
                 }
 
-                if (!withinAngledBraces && withinBody && !withinScript && !withinStyle && usefulText) {
+                if (!withinAngledBraces && withinBody && !withinScript && !withinStyle) {
                     sentence.append(content.charAt(stringPointer));
                     if (withinAnchor)
                         anchorText.append(content.charAt(stringPointer));
@@ -304,15 +329,21 @@ public class Crawler {
 
                 if (withinTag)
                     tag.append(content.charAt(stringPointer));
+
+                if (withinAngledBraces && withinMeta)
+                    metaAttributes.append(content.charAt(stringPointer));
             }
-            API.insertCrawlEntry(queue, url, queueOfStrings, textList, title.toString().trim());
+            API.insertCrawlEntry(queue, url, queueOfStrings, textList, title.toString().trim(), metaDescription,
+                    metaKeywords);
         }
     }
 
     public void fetchPage() {
         while (true) {
-            String url = API.getNextURL();
-            crawlPage(url);
+            String[] urls = API.getNextURL();
+            for (String url : urls) {
+                crawlPage(url);
+            }
         }
     }
 }

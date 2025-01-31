@@ -11,8 +11,10 @@ public class Page {
     private List<String> text;
     private String title;
     private String anchorText;
+    private String description;
+    private String keywords;
     private String last_crawled;
-    
+
     public String getURL() {
         return url;
     }
@@ -36,6 +38,15 @@ public class Page {
     public void setText(List<String> text) {
         this.text = new ArrayList<>(text);
     }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public void setKeywords(String keywords) {
+        this.keywords = keywords;
+    }
+
     public void setURL(String url) {
         this.url = url;
     }
