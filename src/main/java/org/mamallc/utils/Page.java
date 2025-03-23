@@ -2,7 +2,6 @@ package org.mamallc.utils;
 
 import java.util.Set;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 
 public class Page {
@@ -52,7 +51,7 @@ public class Page {
     }
 
     public void setOutgoingURLS(Set<String> urls) {
-        this.outgoing = new HashSet<>(urls);
+        this.outgoing = urls;
     }
 
     public String getLastDate() {

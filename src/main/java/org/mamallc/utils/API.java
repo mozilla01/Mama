@@ -21,13 +21,13 @@ public class API {
 
     public static void insertCrawlEntry(
             Set<org.mamallc.utils.URL> urls,
+            Set<String> outgoingURLs,
             String url,
-            Set<String> queueOfStrings,
             List<String> textList, String title, String description, String keywords) {
         try {
             Page page = new Page();
             page.setURL(url);
-            page.setOutgoingURLS(queueOfStrings);
+            page.setOutgoingURLS(outgoingURLs);
             page.setLastDate(new Date().toInstant().toString());
             page.setTitle(title);
             page.setText(textList);
@@ -52,11 +52,10 @@ public class API {
                 os.write(input, 0, input.length);
             }
 
-            try (
-                    BufferedReader br = new BufferedReader(
-                            new InputStreamReader(
-                                    con.getInputStream(),
-                                    StandardCharsets.UTF_8))) {
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(
+                            con.getInputStream(),
+                            StandardCharsets.UTF_8))) {
                 StringBuilder response = new StringBuilder();
                 String responseLine = null;
                 while ((responseLine = br.readLine()) != null) {

@@ -13,6 +13,11 @@ import java.util.zip.GZIPInputStream;
 import org.mamallc.utils.API;
 import org.mamallc.utils.URL;
 
+import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.Page;
+
 public class Crawler {
 
     public static String decompress(String str) throws Exception {
@@ -88,9 +93,26 @@ public class Crawler {
             valid = 2; // Simple nested route, append root
         else if (protocol.toString().equals("http"))
             valid = 3; // Regular URL, do not append
+        else if (protocol.length() > 0 && (protocol.charAt(0) == '#' || protocol.charAt(0) == '?'))
+            valid = 2; // Anchor or query string, do not append
         else
             valid = 4; // Another domain, like ab.wikipedia.org
         return valid;
+    }
+
+    public String processURL(String nestedURLString, String url, String rootURL) {
+        String finalString = "";
+        int valid = checkForProtocol(nestedURLString);
+        if (valid == 0 || valid == 3) {
+            finalString = nestedURLString;
+        } else if (valid == 1) {
+            finalString = "https:" + nestedURLString;
+        } else if (valid == 2) {
+            finalString = url + nestedURLString;
+        } else if (valid == 4) {
+            finalString = "https://" + nestedURLString;
+        }
+        return finalString;
     }
 
     boolean checkRobotsTxt(String url, String rootURL, Scanner sc) {
@@ -143,29 +165,22 @@ public class Crawler {
                 block != Character.UnicodeBlock.SPECIALS;
     }
 
-    public void crawlPage(String url) {
-        System.out.println("--------------------------------------");
-        System.out.println("Now crawling " + url);
-        System.out.println("--------------------------------------");
+    public void crawlPage(String url, Page page) {
+        for (int i = 0; i < 50; i++)
+            System.out.print("-");
+        System.out.println();
 
         String content = null;
-        URLConnection conn = null;
         String rootURL = getRootURL(url);
 
+        // Navigate to the URL and wait for the page to load
+        System.out.println("Navigating to " + url);
         try {
-            conn = new URI(url).toURL().openConnection();
-            String contentEncoding = conn.getHeaderField("Content-Encoding");
-
-            Scanner sc = new Scanner(conn.getInputStream());
-            sc.useDelimiter("\\Z");
-            content = sc.next();
-            if (contentEncoding != null && contentEncoding.equals("gzip")) {
-                // content = decompress(content);
-                content = "";
-            }
-            sc.close();
-        } catch (Exception ex) {
-            ex.printStackTrace();
+            page.navigate(url);
+            content = page.evaluate("() => document.documentElement.innerHTML").toString();
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+            return;
         }
 
         // Parsing the HTML for words
@@ -189,8 +204,8 @@ public class Crawler {
         String metaKeywords = "";
 
         List<String> textList = new ArrayList<>();
-        Set<String> queueOfStrings = new HashSet<>();
         Set<URL> queue = new HashSet<>();
+        Set<String> queueOfStrings = new HashSet<>();
 
         if (content != null && !content.isEmpty() && !content.isBlank()) {
             // try {
@@ -258,29 +273,25 @@ public class Crawler {
                             withinAnchor = true;
                         if (tagString.equals("/a")) {
                             withinAnchor = false;
-                            String nestedURLString = nestedURL.toString();
-                            String finalString = "";
-                            int valid = checkForProtocol(nestedURLString);
-                            if (valid == 0 || valid == 3) {
-                                finalString = nestedURLString;
-                            } else if (valid == 1) {
-                                finalString = "https:" + nestedURLString;
-                            } else if (valid == 2) {
-                                finalString = rootURL + nestedURLString;
-                            } else if (valid == 4) {
-                                finalString = "https://" + nestedURLString;
+                            String nestedURLString = removeUTFStrings(nestedURL.toString());
+                            if (!nestedURLString.isEmpty() && !nestedURLString.isBlank()
+                                    && !queueOfStrings.contains(nestedURLString)
+                                    && !nestedURLString.equalsIgnoreCase("javascript:void(0);")) {
+                                System.out.println("Initial String: " + nestedURLString);
+                                String finalString = processURL(nestedURLString, url, rootURL);
+                                // Replace possible UTF-8 characters with symbols
+                                finalString = removeUTFStrings(finalString);
+                                System.out.println("Final string: " + finalString);
+
+                                URL queueURL = new URL(finalString);
+                                String anchorTextString = anchorText.toString().trim().strip();
+                                queueURL.setAnchorText(anchorTextString);
+
+                                queue.add(queueURL);
+                                queueOfStrings.add(finalString);
+                                nestedURL = new StringBuilder();
+                                anchorText = new StringBuilder();
                             }
-                            // Replace possible UTF-8 characters with symbols
-                            finalString = removeUTFStrings(finalString);
-
-                            URL queueURL = new URL(finalString);
-                            String anchorTextString = anchorText.toString().trim().strip();
-                            queueURL.setAnchorText(anchorTextString);
-
-                            queue.add(queueURL);
-                            queueOfStrings.add(finalString);
-                            nestedURL = new StringBuilder();
-                            anchorText = new StringBuilder();
                         }
                         tag = new StringBuilder();
                     }
@@ -333,17 +344,34 @@ public class Crawler {
                 if (withinAngledBraces && withinMeta)
                     metaAttributes.append(content.charAt(stringPointer));
             }
-            API.insertCrawlEntry(queue, url, queueOfStrings, textList, title.toString().trim(), metaDescription,
+            API.insertCrawlEntry(queue, queueOfStrings, url, textList, title.toString().trim(), metaDescription,
                     metaKeywords);
         }
     }
 
     public void fetchPage() {
+
+        Playwright playwright = Playwright.create();
+        boolean headless = Boolean.valueOf(System.getProperty("headless", "true"));
+        Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(headless));
+        Page page = browser.newPage();
+
+        page.route("**/*", route -> { // Block unnecessary resources
+            String reqUrl = route.request().url();
+            if (reqUrl.endsWith(".png") || reqUrl.endsWith(".jpg") || reqUrl.endsWith(".css")
+                    || reqUrl.contains("ads")) {
+                route.abort();
+            } else {
+                route.resume();
+            }
+        });
+
         while (true) {
             String[] urls = API.getNextURL();
             for (String url : urls) {
-                crawlPage(url);
+                crawlPage(url, page);
             }
         }
+
     }
 }
