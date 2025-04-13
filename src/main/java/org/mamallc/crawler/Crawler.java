@@ -96,7 +96,7 @@ public class Crawler {
         else if (protocol.length() > 0 && (protocol.charAt(0) == '#' || protocol.charAt(0) == '?'))
             valid = 2; // Anchor or query string, do not append
         else
-            valid = 4; // Another domain, like ab.wikipedia.org
+            valid = 4; // hide?p=1 something
         return valid;
     }
 
@@ -108,9 +108,9 @@ public class Crawler {
         } else if (valid == 1) {
             finalString = "https:" + nestedURLString;
         } else if (valid == 2) {
-            finalString = url + nestedURLString;
+            finalString = rootURL + nestedURLString;
         } else if (valid == 4) {
-            finalString = "https://" + nestedURLString;
+            finalString = rootURL + "/" + nestedURLString;
         }
         return finalString;
     }
@@ -176,7 +176,7 @@ public class Crawler {
         // Navigate to the URL and wait for the page to load
         System.out.println("Navigating to " + url);
         try {
-            page.navigate(url);
+            page.navigate(url, new Page.NavigateOptions().setTimeout(8000));
             content = page.evaluate("() => document.documentElement.innerHTML").toString();
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -369,7 +369,11 @@ public class Crawler {
         while (true) {
             String[] urls = API.getNextURL();
             for (String url : urls) {
+                long startTime = System.currentTimeMillis();
                 crawlPage(url, page);
+                long endTime = System.currentTimeMillis();
+                long duration = endTime - startTime;
+                System.out.println("Crawled " + url + " in " + duration / 1000.0 + " s");
             }
         }
 

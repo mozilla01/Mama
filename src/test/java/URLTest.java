@@ -18,7 +18,7 @@ public class URLTest {
         urls.put("#", "https://www.wikipedia.org#");
 
         for (Map.Entry<String, String> entry : urls.entrySet()) {
-            assertEquals(entry.getValue(), crawler.processURL(entry.getKey(), rootURL));
+            assertEquals(entry.getValue(), crawler.processURL(entry.getKey(), entry.getValue(), rootURL));
         }
     }
 }
