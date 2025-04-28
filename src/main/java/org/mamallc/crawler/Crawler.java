@@ -7,16 +7,15 @@ import java.net.URI;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import org.mamallc.utils.API;
 import org.mamallc.utils.URL;
-
-import com.microsoft.playwright.Browser;
-import com.microsoft.playwright.BrowserType;
-import com.microsoft.playwright.Playwright;
-import com.microsoft.playwright.Page;
 
 public class Crawler {
 
@@ -72,7 +71,7 @@ public class Crawler {
                 i++;
             rootURL = url.substring(0, i);
         } catch (Exception e) {
-            System.out.println(e.getMessage());
+            e.printStackTrace();
         }
         return rootURL;
     }
@@ -165,21 +164,29 @@ public class Crawler {
                 block != Character.UnicodeBlock.SPECIALS;
     }
 
-    public void crawlPage(String url, Page page) {
+    public void crawlPage(String url, boolean writeToDB) {
         for (int i = 0; i < 50; i++)
             System.out.print("-");
         System.out.println();
 
         String content = null;
         String rootURL = getRootURL(url);
+        URLConnection conn = null;
 
         // Navigate to the URL and wait for the page to load
         System.out.println("Navigating to " + url);
         try {
-            page.navigate(url, new Page.NavigateOptions().setTimeout(8000));
-            content = page.evaluate("() => document.documentElement.innerHTML").toString();
+            conn = new URI(url).toURL().openConnection();
+            conn.setRequestProperty("User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3");
+            conn.setConnectTimeout(8000);
+            conn.setReadTimeout(5000);
+            Scanner sc = new Scanner(conn.getInputStream());
+            sc.useDelimiter("\\Z");
+            content = sc.next();
+            sc.close();
         } catch (Exception e) {
-            System.out.println(e.getMessage());
+            e.printStackTrace();
             return;
         }
 
@@ -208,174 +215,188 @@ public class Crawler {
         Set<String> queueOfStrings = new HashSet<>();
 
         if (content != null && !content.isEmpty() && !content.isBlank()) {
-            // try {
-            for (int stringPointer = 0; stringPointer < content.length(); stringPointer++) {
-                // Reaching end of opening tag
-                // Either <tag> or <tag attr="kadfl" ...
-                if ((content.charAt(stringPointer) == ' ' || content.charAt(stringPointer) == '>')
-                        && withinAngledBraces) {
-                    if (content.charAt(stringPointer) == '>') {
-                        withinAngledBraces = false;
-                        if (tag.toString().isEmpty() && withinMeta) {
-                            withinMeta = false;
-                            String[] metaArr = metaAttributes.toString().split("\" ");
-                            String metaName = "";
-                            for (String attr : metaArr) {
-                                String[] attrArr = attr.split("=");
-                                String key = "", value = "";
-                                if (attrArr.length > 1) {
-                                    key = attrArr[0].trim();
-                                    value = attrArr[1].trim().replace("\"", "");
+            try {
+                for (int stringPointer = 0; stringPointer < content.length(); stringPointer++) {
+                    // Reaching end of opening tag
+                    // Either <tag> or <tag attr="kadfl" ...
+                    if ((content.charAt(stringPointer) == ' ' || content.charAt(stringPointer) == '>')
+                            && withinAngledBraces) {
+                        if (content.charAt(stringPointer) == '>') {
+                            withinAngledBraces = false;
+                            if (tag.toString().isEmpty() && withinMeta) {
+                                withinMeta = false;
+                                String[] metaArr = metaAttributes.toString().split("\" ");
+                                String metaName = "";
+                                for (String attr : metaArr) {
+                                    String[] attrArr = attr.split("=");
+                                    String key = "", value = "";
+                                    if (attrArr.length > 1) {
+                                        key = attrArr[0].trim();
+                                        value = attrArr[1].trim().replace("\"", "");
+                                    }
+                                    if (key.equals("name") && value.equals("description")) {
+                                        metaName = "description";
+                                    }
+                                    if (key.equals("name") && value.equals("keywords")) {
+                                        System.out.println("Found keywords");
+                                        metaName = "keywords";
+                                    }
+                                    if (key.equals("content") && metaName.equals("description")) {
+                                        metaDescription = value;
+                                        metaName = "";
+                                    }
+                                    if (key.equals("content") && metaName.equals("keywords")) {
+                                        metaKeywords = value;
+                                        metaName = "";
+                                    }
                                 }
-                                if (key.equals("name") && value.equals("description")) {
-                                    metaName = "description";
-                                }
-                                if (key.equals("name") && value.equals("keywords")) {
-                                    System.out.println("Found keywords");
-                                    metaName = "keywords";
-                                }
-                                if (key.equals("content") && metaName.equals("description")) {
-                                    metaDescription = value;
-                                    metaName = "";
-                                }
-                                if (key.equals("content") && metaName.equals("keywords")) {
-                                    metaKeywords = value;
-                                    metaName = "";
+                                metaAttributes = new StringBuilder();
+                            }
+                        }
+                        if (withinMeta && content.charAt(stringPointer) == ' ') {
+                            metaAttributes.append(' ');
+                        }
+                        if (withinTag) {
+                            String tagString = tag.toString().strip();
+                            withinTag = false;
+                            // We need to know which tag we are about to enter or leave
+                            if (tagString.equals("script"))
+                                withinScript = true;
+                            if (tagString.equals("/script") && withinScript)
+                                withinScript = false;
+                            if (tagString.equals("meta"))
+                                withinMeta = true;
+                            if (tagString.equals("style"))
+                                withinStyle = true;
+                            if (tagString.equals("/style") && withinStyle)
+                                withinStyle = false;
+                            if (tagString.equals("title") && !withinTitle)
+                                withinTitle = true;
+                            if (!withinBody && tagString.equals("body"))
+                                withinBody = true;
+                            if (withinBody && tagString.equals("/body"))
+                                withinBody = false;
+                            if (tagString.equals("a"))
+                                withinAnchor = true;
+                            if (tagString.equals("/a")) {
+                                withinAnchor = false;
+                                String nestedURLString = removeUTFStrings(nestedURL.toString());
+                                if (!nestedURLString.isEmpty() && !nestedURLString.isBlank()
+                                        && !queueOfStrings.contains(nestedURLString)
+                                        && !nestedURLString.equalsIgnoreCase("javascript:void(0);")) {
+                                    System.out.println("Initial String: " + nestedURLString);
+                                    String finalString = processURL(nestedURLString, url, rootURL);
+                                    // Replace possible UTF-8 characters with symbols
+                                    finalString = removeUTFStrings(finalString);
+                                    System.out.println("Final string: " + finalString);
+
+                                    URL queueURL = new URL(finalString);
+                                    String anchorTextString = anchorText.toString().trim().strip();
+                                    queueURL.setAnchorText(anchorTextString);
+
+                                    queue.add(queueURL);
+                                    queueOfStrings.add(finalString);
+                                    nestedURL = new StringBuilder();
+                                    anchorText = new StringBuilder();
                                 }
                             }
-                            metaAttributes = new StringBuilder();
+                            tag = new StringBuilder();
                         }
+                        continue;
                     }
-                    if (withinMeta && content.charAt(stringPointer) == ' ') {
-                        metaAttributes.append(' ');
+                    if (withinURL && content.charAt(stringPointer) == '"') {
+                        withinURL = false;
                     }
-                    if (withinTag) {
-                        String tagString = tag.toString().strip();
-                        withinTag = false;
-                        // We need to know which tag we are about to enter or leave
-                        if (tagString.equals("script"))
-                            withinScript = true;
-                        if (tagString.equals("/script") && withinScript)
-                            withinScript = false;
-                        if (tagString.equals("meta"))
-                            withinMeta = true;
-                        if (tagString.equals("style"))
-                            withinStyle = true;
-                        if (tagString.equals("/style") && withinStyle)
-                            withinStyle = false;
-                        if (tagString.equals("title") && !withinTitle)
-                            withinTitle = true;
-                        if (!withinBody && tagString.equals("body"))
-                            withinBody = true;
-                        if (withinBody && tagString.equals("/body"))
-                            withinBody = false;
-                        if (tagString.equals("a"))
-                            withinAnchor = true;
-                        if (tagString.equals("/a")) {
-                            withinAnchor = false;
-                            String nestedURLString = removeUTFStrings(nestedURL.toString());
-                            if (!nestedURLString.isEmpty() && !nestedURLString.isBlank()
-                                    && !queueOfStrings.contains(nestedURLString)
-                                    && !nestedURLString.equalsIgnoreCase("javascript:void(0);")) {
-                                System.out.println("Initial String: " + nestedURLString);
-                                String finalString = processURL(nestedURLString, url, rootURL);
-                                // Replace possible UTF-8 characters with symbols
-                                finalString = removeUTFStrings(finalString);
-                                System.out.println("Final string: " + finalString);
 
-                                URL queueURL = new URL(finalString);
-                                String anchorTextString = anchorText.toString().trim().strip();
-                                queueURL.setAnchorText(anchorTextString);
+                    if (content.charAt(stringPointer) == '<' && !withinAngledBraces) {
+                        withinAngledBraces = true;
+                        withinTag = true;
+                        if (withinTitle)
+                            withinTitle = false;
+                        if (withinAnchor)
+                            anchorText.append(" ");
+                        String sentenceString = sentence.toString().trim();
+                        if (!sentenceString.isEmpty() || !sentenceString.isBlank())
+                            textList.add(sentenceString);
+                        sentence = new StringBuilder();
+                        continue;
+                    }
 
-                                queue.add(queueURL);
-                                queueOfStrings.add(finalString);
+                    if (withinURL) {
+                        nestedURL.append(content.charAt(stringPointer));
+                    }
+
+                    if (withinTitle && !withinBody && !withinAngledBraces) {
+                        title.append(content.charAt(stringPointer));
+                    }
+
+                    if (!withinAngledBraces && withinBody && !withinScript && !withinStyle) {
+                        sentence.append(content.charAt(stringPointer));
+                        if (withinAnchor)
+                            anchorText.append(content.charAt(stringPointer));
+                    }
+
+                    // Checking to see if we found the href attr in the anchor
+                    if (withinAnchor && !withinURL && content.charAt(stringPointer) == 'h'
+                            && content.charAt(stringPointer + 1) == 'r' && content.charAt(stringPointer + 2) == 'e'
+                            && content.charAt(stringPointer + 3) == 'f') {
                                 nestedURL = new StringBuilder();
-                                anchorText = new StringBuilder();
-                            }
-                        }
-                        tag = new StringBuilder();
+                        while (content.charAt(stringPointer) != '"')
+                            stringPointer++;
+                        withinURL = true;
                     }
-                    continue;
-                }
-                if (withinURL && content.charAt(stringPointer) == '"') {
-                    withinURL = false;
-                }
 
-                if (content.charAt(stringPointer) == '<' && !withinAngledBraces) {
-                    withinAngledBraces = true;
-                    withinTag = true;
-                    if (withinTitle)
-                        withinTitle = false;
-                    if (withinAnchor)
-                        anchorText.append(" ");
-                    String sentenceString = sentence.toString().trim();
-                    if (!sentenceString.isEmpty() || !sentenceString.isBlank())
-                        textList.add(sentenceString);
-                    sentence = new StringBuilder();
-                    continue;
+                    if (withinTag)
+                        tag.append(content.charAt(stringPointer));
+
+                    if (withinAngledBraces && withinMeta)
+                        metaAttributes.append(content.charAt(stringPointer));
                 }
-
-                if (withinURL) {
-                    nestedURL.append(content.charAt(stringPointer));
-                }
-
-                if (withinTitle && !withinBody && !withinAngledBraces) {
-                    title.append(content.charAt(stringPointer));
-                }
-
-                if (!withinAngledBraces && withinBody && !withinScript && !withinStyle) {
-                    sentence.append(content.charAt(stringPointer));
-                    if (withinAnchor)
-                        anchorText.append(content.charAt(stringPointer));
-                }
-
-                // Checking to see if we found the href attr in the anchor
-                if (withinAnchor && !withinURL && content.charAt(stringPointer) == 'h'
-                        && content.charAt(stringPointer + 1) == 'r' && content.charAt(stringPointer + 2) == 'e'
-                        && content.charAt(stringPointer + 3) == 'f') {
-                    while (content.charAt(stringPointer) != '"')
-                        stringPointer++;
-                    withinURL = true;
-                }
-
-                if (withinTag)
-                    tag.append(content.charAt(stringPointer));
-
-                if (withinAngledBraces && withinMeta)
-                    metaAttributes.append(content.charAt(stringPointer));
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            API.insertCrawlEntry(queue, queueOfStrings, url, textList, title.toString().trim(), metaDescription,
-                    metaKeywords);
+            if (writeToDB)
+                API.insertCrawlEntry(queue, queueOfStrings, url, textList, title.toString().trim(), metaDescription,
+                        metaKeywords);
         }
     }
 
-    public void fetchPage() {
-
-        Playwright playwright = Playwright.create();
-        boolean headless = Boolean.valueOf(System.getProperty("headless", "true"));
-        Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(headless));
-        Page page = browser.newPage();
-
-        page.route("**/*", route -> { // Block unnecessary resources
-            String reqUrl = route.request().url();
-            if (reqUrl.endsWith(".png") || reqUrl.endsWith(".jpg") || reqUrl.endsWith(".css")
-                    || reqUrl.contains("ads")) {
-                route.abort();
-            } else {
-                route.resume();
-            }
-        });
+    public void crawl(Map<String, String> config) throws InterruptedException {
+        int threads = Integer.parseInt(config.get("--threads"));
+        boolean writeToDB = Boolean.parseBoolean(config.get("--write-db"));
+        if (writeToDB) System.out.println("Writing to DB is enabled");
+        else System.out.println("Writing to DB is disabled");
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        List<Future<?>> futures = new ArrayList<>();
+        System.out.println("Using " + threads + " threads, crawling will start in 5 seconds...");
+        TimeUnit.SECONDS.sleep(5);
 
         while (true) {
             String[] urls = API.getNextURL();
-            for (String url : urls) {
-                long startTime = System.currentTimeMillis();
-                crawlPage(url, page);
-                long endTime = System.currentTimeMillis();
-                long duration = endTime - startTime;
-                System.out.println("Crawled " + url + " in " + duration / 1000.0 + " s");
+
+            if (urls.length > 0)
+                for (String url : urls) {
+                    Future<?> future = executor.submit(() -> {
+                        long startTime = System.currentTimeMillis();
+                        crawlPage(url, writeToDB);
+                        long endTime = System.currentTimeMillis();
+                        long duration = endTime - startTime;
+                        System.out.println("Crawled " + url + " in " + duration / 1000.0 + " s");
+                    });
+                    futures.add(future);
+                }
+            if (futures.size() >= 10) {
+                Iterator<Future<?>> iterator = futures.iterator();
+                while (iterator.hasNext()) {
+                    Future<?> future = iterator.next();
+                    try {
+                        future.get();
+                        iterator.remove();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
             }
         }
-
     }
 }
