@@ -1,4 +1,4 @@
-package org.mamallc.utils;
+package org.mamallc.schemas;
 
 import java.util.Set;
 import java.util.ArrayList;

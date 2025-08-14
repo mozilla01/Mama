@@ -1,161 +1,23 @@
 package org.mamallc.crawler;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
 import java.net.URI;
-import java.net.URLConnection;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.zip.GZIPInputStream;
+
+import org.mamallc.schemas.URL;
 import org.mamallc.utils.API;
-import org.mamallc.utils.URL;
+import org.mamallc.utils.URLString;
 
 public class Crawler {
 
-    public static String decompress(String str) throws Exception {
-        byte[] byteCompressed = str.getBytes(StandardCharsets.UTF_8);
-        final StringBuilder outStr = new StringBuilder();
-        if ((byteCompressed == null) || (byteCompressed.length == 0)) {
-            return "";
-        }
-        if (isCompressed(byteCompressed)) {
-            final GZIPInputStream gis = new GZIPInputStream(new ByteArrayInputStream(byteCompressed));
-            final BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(gis, "UTF-8"));
-            String line;
-            while ((line = bufferedReader.readLine()) != null) {
-                outStr.append(line);
-            }
-        } else {
-            outStr.append(byteCompressed);
-        }
-        return outStr.toString();
-    }
-
-    public static boolean isCompressed(final byte[] compressed) {
-        return (compressed[0] == (byte) (GZIPInputStream.GZIP_MAGIC))
-                && (compressed[1] == (byte) (GZIPInputStream.GZIP_MAGIC >> 8));
-    }
-
-    public static String removeUTFStrings(String str) {
-        return str.replace("&#x2F;", "/").replace("&#x3D;", "=").replace("&#x26;", "&")
-                .replace("&#x3F;", "?").replace("&#x25;", "%").replace("&#x3A;", ":")
-                .replace("&#x2C;", ",").replace("&#x2D;", "-").replace("&#x2E;", ".").replace("&#x23;", "#")
-                .replace("&#x3B;", ";").replace("&#x3C;", "<").replace("&#x3E;", ">").replace("&#x40;", "@")
-                .replace("&#x5F;", "_").replace("&#x7E;", "~").replace("&#x5B;", "[").replace("&#x5D;", "]")
-                .replace("&#x7B;", "{").replace("&#x7D;", "}").replace("&#x7C;", "|").replace("&#x60;", "`")
-                .replace("&#x22;", "\"").replace("&#x27;", "'").replace("&#x3E;", ">").replace("&#x3C;", "<")
-                .replace("&#x5C;", "\\").replace("&#x24;", "$").replace("&#x40;", "@").replace("&#x2B;", "+")
-                .replace("&#x3D;", "=").replace("&#x2A;", "*").replace("&#x25;", "%").replace("&#x5E;", "^")
-                .replace("&#x21;", "!").replace("&#x3F;", "?").replace("&#x40;", "@").replace("&#x2C;", ",")
-                .replace("&#x2E;", ".").replace("&#x2F;", "/").replace("&#x3A;", ":").replace("&#x3B;", ";")
-                .replace("&#x3D;", "=").replace("&#x3F;", "?").replace("&#x40;", "@").replace("&#x5B;", "[")
-                .replace("&#x5C;", "\\").replace("&#x5D;", "]").replace("&#x5E;", "^").replace("&#x5F;", "_")
-                .replace("&#x60;", "`").replace("&#x7B;", "{").replace("&#x7C;", "|").replace("&#x7D;", "}")
-                .replace("&#x7E;", "~");
-    }
-
-    String getRootURL(String url) {
-        String rootURL = "https://example.com";
-        try {
-            int i = 0;
-            while (url.charAt(i) != '.')
-                i++;
-            while (i < url.length() && url.charAt(i) != '/')
-                i++;
-            rootURL = url.substring(0, i);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return rootURL;
-    }
-
-    int checkForProtocol(String url) {
-        StringBuilder protocol = new StringBuilder();
-        url = url.trim();
-        int valid = 0;
-        int i = 0;
-        while (i < url.length() && i < 4) {
-            protocol.append(url.charAt(i));
-            i++;
-        }
-        if (protocol.length() > 1 && protocol.charAt(0) == '/' && protocol.charAt(1) == '/')
-            valid = 1; // Unusual URL, do not append
-        else if ((protocol.length() > 1 && protocol.charAt(0) == '/' && protocol.charAt(1) != '/')
-                || (protocol.length() == 1 && protocol.charAt(0) == '/'))
-            valid = 2; // Simple nested route, append root
-        else if (protocol.toString().equals("http"))
-            valid = 3; // Regular URL, do not append
-        else if (protocol.length() > 0 && (protocol.charAt(0) == '#' || protocol.charAt(0) == '?'))
-            valid = 2; // Anchor or query string, do not append
-        else
-            valid = 4; // hide?p=1 something
-        return valid;
-    }
-
-    public String processURL(String nestedURLString, String url, String rootURL) {
-        String finalString = "";
-        int valid = checkForProtocol(nestedURLString);
-        if (valid == 0 || valid == 3) {
-            finalString = nestedURLString;
-        } else if (valid == 1) {
-            finalString = "https:" + nestedURLString;
-        } else if (valid == 2) {
-            finalString = rootURL + nestedURLString;
-        } else if (valid == 4) {
-            finalString = rootURL + "/" + nestedURLString;
-        }
-        return finalString;
-    }
-
-    boolean checkRobotsTxt(String url, String rootURL, Scanner sc) {
-        boolean canVisit = true;
-        URLConnection conn = null;
-        String currentRoot = getRootURL(url); // Root URL of the URL we are checking
-        try {
-            if (!currentRoot.equals(rootURL)) {
-                conn = new URI(rootURL + "/robots.txt").toURL().openConnection();
-                sc = new Scanner(conn.getInputStream());
-                sc.useDelimiter("\n");
-            }
-            while (sc.hasNext()) {
-                String line = sc.nextLine();
-                String arr[] = line.split(":");
-                if (arr.length > 1) {
-                    if (arr[0].trim().equals("User-agent") && arr[1].trim().equals("*")) {
-                        String rule[] = sc.nextLine().split(":");
-                        while (rule.length < 2)
-                            rule = sc.nextLine().split(":");
-                        String directive = rule[0].trim();
-                        String route = rule[1].trim();
-                        while (rule[0].trim().equals("Disallow") || rule[0].trim().equals("Allow")) {
-                            directive = rule[0].trim();
-                            route = rule[1].trim();
-                            Pattern regex = Pattern.compile(route);
-                            Matcher matcher = regex.matcher(url);
-                            if (directive.equals("Disallow") && matcher.find()) {
-                                canVisit = false;
-                            }
-                            if (directive.equals("Allow") && matcher.find()) {
-                                canVisit = true;
-                            }
-                            rule = sc.nextLine().split(":");
-                        }
-                    }
-                }
-            }
-            sc.close();
-        } catch (Exception e) {
-            System.out.println(e);
-        }
-        return canVisit;
-    }
+    public static Set<String> urlCache = new HashSet<>();
 
     public boolean isPrintableChar(char c) {
         Character.UnicodeBlock block = Character.UnicodeBlock.of(c);
@@ -164,29 +26,46 @@ public class Crawler {
                 block != Character.UnicodeBlock.SPECIALS;
     }
 
-    public void crawlPage(String url, boolean writeToDB) {
+    public void crawlPage(String url, boolean writeToDB, boolean debug) {
         for (int i = 0; i < 50; i++)
             System.out.print("-");
         System.out.println();
 
         String content = null;
-        String rootURL = getRootURL(url);
-        URLConnection conn = null;
+        String rootURL = URLString.getRootURL(url);
+        java.net.URL conn = null;
+        HttpURLConnection httpConn = null;
 
         // Navigate to the URL and wait for the page to load
         System.out.println("Navigating to " + url);
+        long startTime = System.currentTimeMillis();
+
         try {
-            conn = new URI(url).toURL().openConnection();
-            conn.setRequestProperty("User-Agent",
+            if (debug)
+                System.out.println("Fetching page content...");
+            conn = new URI(url).toURL();
+            httpConn = (HttpURLConnection) conn.openConnection();
+            httpConn.setConnectTimeout(8000);
+            httpConn.setReadTimeout(5000);
+            httpConn.setRequestProperty("User-Agent",
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3");
-            conn.setConnectTimeout(8000);
-            conn.setReadTimeout(5000);
-            Scanner sc = new Scanner(conn.getInputStream());
-            sc.useDelimiter("\\Z");
-            content = sc.next();
-            sc.close();
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(httpConn.getInputStream()));
+            StringBuilder contentBuilder = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                contentBuilder.append(line);
+            }
+            content = contentBuilder.toString();
+            reader.close();
+            if (debug)
+                System.out.println("Page fetched successfully.");
+        } catch (SocketTimeoutException e) {
+            System.out.println("Connection timed out while fetching the page: " + url);
+            return;
         } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println("Failed to fetch the page: " + e.getMessage());
+            ;
             return;
         }
 
@@ -280,21 +159,25 @@ public class Crawler {
                                 withinAnchor = true;
                             if (tagString.equals("/a")) {
                                 withinAnchor = false;
-                                String nestedURLString = removeUTFStrings(nestedURL.toString());
+                                String nestedURLString = URLString.removeUTFStrings(nestedURL.toString());
                                 if (!nestedURLString.isEmpty() && !nestedURLString.isBlank()
                                         && !queueOfStrings.contains(nestedURLString)
                                         && !nestedURLString.equalsIgnoreCase("javascript:void(0);")) {
-                                    System.out.println("Initial String: " + nestedURLString);
-                                    String finalString = processURL(nestedURLString, url, rootURL);
+                                    if (debug)
+                                        System.out.println("Initial String: " + nestedURLString);
+                                    String finalString = URLString.processURL(nestedURLString, url, rootURL);
                                     // Replace possible UTF-8 characters with symbols
-                                    finalString = removeUTFStrings(finalString);
-                                    System.out.println("Final string: " + finalString);
+                                    finalString = URLString.removeUTFStrings(finalString);
+                                    if (debug)
+                                        System.out.println("Final string: " + finalString);
 
                                     URL queueURL = new URL(finalString);
                                     String anchorTextString = anchorText.toString().trim().strip();
                                     queueURL.setAnchorText(anchorTextString);
 
-                                    queue.add(queueURL);
+                                    if (!urlCache.contains(finalString))
+                                        queue.add(queueURL);
+                                    urlCache.add(finalString);
                                     queueOfStrings.add(finalString);
                                     nestedURL = new StringBuilder();
                                     anchorText = new StringBuilder();
@@ -340,7 +223,7 @@ public class Crawler {
                     if (withinAnchor && !withinURL && content.charAt(stringPointer) == 'h'
                             && content.charAt(stringPointer + 1) == 'r' && content.charAt(stringPointer + 2) == 'e'
                             && content.charAt(stringPointer + 3) == 'f') {
-                                nestedURL = new StringBuilder();
+                        nestedURL = new StringBuilder();
                         while (content.charAt(stringPointer) != '"')
                             stringPointer++;
                         withinURL = true;
@@ -352,6 +235,10 @@ public class Crawler {
                     if (withinAngledBraces && withinMeta)
                         metaAttributes.append(content.charAt(stringPointer));
                 }
+                long endTime = System.currentTimeMillis();
+                long duration = endTime - startTime;
+                System.out.println("Crawled " + url + " in " + duration / 1000.0 + " s");
+
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -364,8 +251,11 @@ public class Crawler {
     public void crawl(Map<String, String> config) throws InterruptedException {
         int threads = Integer.parseInt(config.get("--threads"));
         boolean writeToDB = Boolean.parseBoolean(config.get("--write-db"));
-        if (writeToDB) System.out.println("Writing to DB is enabled");
-        else System.out.println("Writing to DB is disabled");
+        boolean debug = Boolean.parseBoolean(config.get("--debug"));
+        if (writeToDB)
+            System.out.println("Writing to DB is enabled");
+        else
+            System.out.println("Writing to DB is disabled");
         ExecutorService executor = Executors.newFixedThreadPool(threads);
         List<Future<?>> futures = new ArrayList<>();
         System.out.println("Using " + threads + " threads, crawling will start in 5 seconds...");
@@ -374,14 +264,15 @@ public class Crawler {
         while (true) {
             String[] urls = API.getNextURL();
 
+            if (urlCache.size() >= 50000) {
+                System.out.println("URL cache size exceeded 10,000, clearing cache...");
+                urlCache.clear();
+            }
+
             if (urls.length > 0)
                 for (String url : urls) {
                     Future<?> future = executor.submit(() -> {
-                        long startTime = System.currentTimeMillis();
-                        crawlPage(url, writeToDB);
-                        long endTime = System.currentTimeMillis();
-                        long duration = endTime - startTime;
-                        System.out.println("Crawled " + url + " in " + duration / 1000.0 + " s");
+                        crawlPage(url, writeToDB, debug);
                     });
                     futures.add(future);
                 }

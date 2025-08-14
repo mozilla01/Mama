@@ -1,5 +1,6 @@
 import org.junit.jupiter.api.Test;
 import org.mamallc.crawler.Crawler;
+import org.mamallc.utils.URLString;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -18,13 +19,13 @@ public class CrawlerTest {
         urls.put("#", "https://www.wikipedia.org#");
 
         for (Map.Entry<String, String> entry : urls.entrySet()) {
-            assertEquals(entry.getValue(), crawler.processURL(entry.getKey(), entry.getValue(), rootURL));
+            assertEquals(entry.getValue(), URLString.processURL(entry.getKey(), entry.getValue(), rootURL));
         }
     }
 
     @Test
     public void crawlTest() {
-        String url = "https://owasp.org";
-        crawler.crawlPage(url, false);
+        String url = "https://owasp.org/chapters/";
+        crawler.crawlPage(url, false, true);
     }
 }

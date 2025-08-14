@@ -15,12 +15,15 @@ import java.util.Date;
 import java.util.List;
 import java.util.Set;
 
+import org.mamallc.schemas.Page;
+import org.mamallc.schemas.URLsContainer;
+
 public class API {
 
-    private static String APIURL = "http://127.0.0.1:8000";
+    private static String APIURL = "http://140.245.4.109:8000";
 
     public static void insertCrawlEntry(
-            Set<org.mamallc.utils.URL> urls,
+            Set<org.mamallc.schemas.URL> urls,
             Set<String> outgoingURLs,
             String url,
             List<String> textList, String title, String description, String keywords) {

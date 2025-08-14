@@ -1,4 +1,4 @@
-package org.mamallc.utils;
+package org.mamallc.schemas;
 
 public class URL {
     private String url;
